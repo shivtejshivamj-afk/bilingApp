@@ -1,4 +1,4 @@
-import type { Order } from '@/types';
+import type { Order, Settings } from '@/types';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,66 @@ export async function deleteOrdersByTable(tableNumber: number): Promise<void> {
     .delete()
     .eq('table_number', tableNumber);
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Settings — shared across every device (admin, kitchen, customer QR menu).
+// ---------------------------------------------------------------------------
+
+function rowToSettings(row: any): Settings {
+  return {
+    restaurantName: row.restaurant_name,
+    masterPin: row.master_pin,
+    taxRate: Number(row.tax_rate),
+    currency: row.currency,
+    lanUrl: row.lan_url ?? '',
+    tableCount: row.table_count,
+    soundEnabled: row.sound_enabled,
+  };
+}
+
+function settingsToRow(settings: Settings) {
+  return {
+    id: 1,
+    restaurant_name: settings.restaurantName,
+    master_pin: settings.masterPin,
+    tax_rate: settings.taxRate,
+    currency: settings.currency,
+    lan_url: settings.lanUrl,
+    table_count: settings.tableCount,
+    sound_enabled: settings.soundEnabled,
+    updated_at: Date.now(),
+  };
+}
+
+export async function fetchSettings(): Promise<Settings | null> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToSettings(data) : null;
+}
+
+export async function saveSettingsRemote(settings: Settings): Promise<void> {
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert(settingsToRow(settings), { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export function subscribeToSettingsEvents(onChange: (settings: Settings) => void): () => void {
+  const channel = supabase
+    .channel('settings-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (payload) => {
+      if (payload.new) onChange(rowToSettings(payload.new));
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 // ---------------------------------------------------------------------------
