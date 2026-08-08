@@ -8,6 +8,9 @@ import {
   updateOrder,
   deleteOrdersByTable,
   subscribeToOrderEvents,
+  fetchSettings,
+  saveSettingsRemote,
+  subscribeToSettingsEvents,
 } from './sync';
 import { DEFAULT_SETTINGS, SEED_MENU } from './seed';
 
@@ -121,16 +124,56 @@ export function useOrders() {
 }
 
 export function useSettings() {
+  // Start from the local cache immediately (so the UI has something to show
+  // right away), then reconcile with Supabase — the shared source of truth
+  // that every device (admin, kitchen, customer QR menu) reads from.
   const [settings, setSettingsState] = useState<Settings>(() => storage.getSettings());
+
+  // Load the shared settings from Supabase on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await fetchSettings();
+        if (!cancelled && remote) {
+          storage.setSettings(remote);
+          setSettingsState(remote);
+        } else if (!cancelled && !remote) {
+          // No row yet (e.g. migration hasn't run) — push our local settings
+          // up so Supabase becomes the shared baseline going forward.
+          const local = storage.getSettings();
+          await saveSettingsRemote(local);
+        }
+      } catch {
+        // Offline or Supabase unreachable — keep using the local cache.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Live updates from any other device (admin changes currency -> customer
+  // phones update instantly without a refresh).
+  useEffect(() => {
+    return subscribeToSettingsEvents((remote) => {
+      storage.setSettings(remote);
+      setSettingsState(remote);
+    });
+  }, []);
+
+  // Same-browser/tab fallback (kept for instant same-device feedback before
+  // the network round-trip completes).
+  useEffect(() => {
+    return subscribeToFullSync(() => setSettingsState(storage.getSettings()));
+  }, []);
 
   const save = useCallback((next: Settings) => {
     storage.setSettings(next);
     setSettingsState(next);
     broadcastFullSync();
-  }, []);
-
-  useEffect(() => {
-    return subscribeToFullSync(() => setSettingsState(storage.getSettings()));
+    saveSettingsRemote(next).catch(() => {
+      // If this fails (offline), the local change still applies on this
+      // device; it'll be overwritten by the next successful remote fetch.
+    });
   }, []);
 
   return { settings, setSettings: save };
