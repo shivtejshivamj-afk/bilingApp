@@ -7,8 +7,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply text-slate-900 antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    @apply text-ink-900 antialiased bg-parchment-100;
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  }
+  h1, h2, h3, .font-display {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
   }
 }
 
@@ -19,6 +22,25 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Signature motif: a perforated edge like a torn kitchen ticket / receipt.
+     Applied to the bottom of order cards, toasts, and bill receipts. */
+  .ticket-edge {
+    position: relative;
+  }
+  .ticket-edge::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 10px;
+    background-image: radial-gradient(circle at 8px 0, transparent 5px, currentColor 5px);
+    background-size: 16px 10px;
+    background-repeat: repeat-x;
+    color: inherit;
+    opacity: 0.08;
   }
 }
 
@@ -60,4 +82,54 @@
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-6px); }
   75% { transform: translateX(6px); }
+}
+
+/* A new order "printing in" like it's feeding out of a kitchen printer */
+@keyframes ticketPrintIn {
+  0% { transform: translateY(-16px) scaleY(0.85); opacity: 0; }
+  60% { transform: translateY(2px) scaleY(1.02); opacity: 1; }
+  100% { transform: translateY(0) scaleY(1); opacity: 1; }
+}
+.animate-ticket-print {
+  animation: ticketPrintIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top center;
+}
+
+/* Toast slide-in from the corner */
+@keyframes toastSlideIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-toast-in {
+  animation: toastSlideIn 0.25s ease-out;
+}
+
+/* Small bounce for cart badges / counters when a value increases */
+@keyframes bounceOnce {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.35); }
+  60% { transform: scale(0.92); }
+}
+.animate-bounce-once {
+  animation: bounceOnce 0.4s ease;
+}
+
+/* Gentle shimmer for skeleton/loading states */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, #EDEBE9 0%, #F7F6F5 50%, #EDEBE9 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
