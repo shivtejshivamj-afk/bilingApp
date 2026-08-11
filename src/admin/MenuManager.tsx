@@ -102,18 +102,18 @@ export default function MenuManager() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-bold text-slate-900">Menu Manager</h2>
+        <h2 className="text-xl font-bold text-ink-900">Menu Manager</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setShowCatManager((v) => !v)}
-            className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 transition"
+            className="px-4 py-2.5 rounded-xl bg-white border border-ink-200 text-ink-700 text-sm font-semibold flex items-center gap-2 hover:bg-ink-50 transition"
           >
             <Tag size={18} />
             Categories
           </button>
           <button
             onClick={openCreate}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold flex items-center gap-2 hover:bg-slate-800 transition"
+            className="px-4 py-2.5 rounded-xl bg-ink-900 text-white text-sm font-semibold flex items-center gap-2 hover:bg-ink-800 transition"
           >
             <Plus size={18} />
             Add Item
@@ -122,26 +122,26 @@ export default function MenuManager() {
       </div>
 
       {showCatManager && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="bg-white rounded-2xl border border-ink-200 shadow-sm p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex gap-2">
             <input
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addCategory()}
               placeholder="New category name..."
-              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="flex-1 px-3 py-2 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
             />
             <button
               onClick={addCategory}
               disabled={!newCatName.trim() || categories.includes(newCatName.trim())}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition disabled:opacity-40 flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 transition disabled:opacity-40 flex items-center gap-1.5"
             >
               <Plus size={16} /> Add
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
             {categories.map((cat) => (
-              <div key={cat} className="group flex items-center gap-1.5 pl-3 pr-1 py-1.5 rounded-xl bg-slate-100 border border-slate-200">
+              <div key={cat} className="group flex items-center gap-1.5 pl-3 pr-1 py-1.5 rounded-xl bg-ink-100 border border-ink-200">
                 {editingCat === cat ? (
                   <input
                     autoFocus
@@ -152,21 +152,21 @@ export default function MenuManager() {
                       if (e.key === 'Escape') setEditingCat(null);
                     }}
                     onBlur={() => renameCategory(cat)}
-                    className="w-24 px-1.5 py-0.5 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-24 px-1.5 py-0.5 rounded-md border border-ink-300 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
                   />
                 ) : (
-                  <span className="text-sm font-medium text-slate-700">{cat}</span>
+                  <span className="text-sm font-medium text-ink-700">{cat}</span>
                 )}
                 {editingCat === cat ? (
-                  <button onClick={() => renameCategory(cat)} className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 transition">
+                  <button onClick={() => renameCategory(cat)} className="p-1 rounded-md text-basil-600 hover:bg-basil-50 transition">
                     <Check size={14} />
                   </button>
                 ) : (
                   <>
-                    <button onClick={() => { setEditingCat(cat); setEditingCatValue(cat); }} className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition opacity-0 group-hover:opacity-100">
+                    <button onClick={() => { setEditingCat(cat); setEditingCatValue(cat); }} className="p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-ink-200 transition opacity-0 group-hover:opacity-100">
                       <Pencil size={13} />
                     </button>
-                    <button onClick={() => deleteCategory(cat)} className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition opacity-0 group-hover:opacity-100">
+                    <button onClick={() => deleteCategory(cat)} className="p-1 rounded-md text-ink-400 hover:text-paprika-600 hover:bg-paprika-50 transition opacity-0 group-hover:opacity-100">
                       <Trash2 size={13} />
                     </button>
                   </>
@@ -179,12 +179,12 @@ export default function MenuManager() {
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={18} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search menu..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
@@ -192,7 +192,7 @@ export default function MenuManager() {
             <button
               key={cat}
               onClick={() => setFilterCat(cat)}
-              className={`px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${filterCat === cat ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+              className={`px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${filterCat === cat ? 'bg-ink-900 text-white' : 'bg-white border border-ink-200 text-ink-600 hover:bg-ink-50'}`}
             >
               {cat}
             </button>
@@ -202,43 +202,43 @@ export default function MenuManager() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((item) => (
-          <div key={item.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden group">
-            <div className="relative h-36 bg-slate-100">
+          <div key={item.id} className="bg-white rounded-2xl border border-ink-200 shadow-sm overflow-hidden group">
+            <div className="relative h-36 bg-ink-100">
               {item.image ? (
                 <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No image</div>
+                <div className="w-full h-full flex items-center justify-center text-ink-300 text-xs">No image</div>
               )}
               {!item.available && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <span className="px-3 py-1 rounded-full bg-white text-slate-900 text-xs font-bold">Unavailable</span>
+                  <span className="px-3 py-1 rounded-full bg-white text-ink-900 text-xs font-bold">Unavailable</span>
                 </div>
               )}
-              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/90 text-slate-700 text-xs font-medium">
+              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/90 text-ink-700 text-xs font-medium">
                 {item.category}
               </span>
             </div>
             <div className="p-3">
-              <h3 className="font-bold text-slate-900 text-sm leading-tight">{item.name}</h3>
-              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description}</p>
-              <p className="font-bold text-slate-900 mt-2">{formatMoney(item.price, settings.currency)}</p>
+              <h3 className="font-bold text-ink-900 text-sm leading-tight">{item.name}</h3>
+              <p className="text-xs text-ink-500 mt-1 line-clamp-2">{item.description}</p>
+              <p className="font-bold text-ink-900 mt-2">{formatMoney(item.price, settings.currency)}</p>
               <div className="flex gap-1.5 mt-3">
                 <button
                   onClick={() => openEdit(item)}
-                  className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition flex items-center justify-center gap-1"
+                  className="flex-1 py-2 rounded-lg bg-ink-100 text-ink-700 text-xs font-semibold hover:bg-ink-200 transition flex items-center justify-center gap-1"
                 >
                   <Pencil size={13} /> Edit
                 </button>
                 <button
                   onClick={() => toggleAvailable(item.id)}
-                  className="px-2.5 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                  className="px-2.5 py-2 rounded-lg bg-ink-100 text-ink-700 hover:bg-ink-200 transition"
                   title={item.available ? 'Set unavailable' : 'Set available'}
                 >
                   {item.available ? <Eye size={14} /> : <EyeOff size={14} />}
                 </button>
                 <button
                   onClick={() => setDeleteId(item.id)}
-                  className="px-2.5 py-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                  className="px-2.5 py-2 rounded-lg bg-paprika-50 text-paprika-600 hover:bg-paprika-100 transition"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -308,17 +308,17 @@ function ItemForm({
     <div className="space-y-4">
       {/* Image */}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">Item Image</label>
+        <label className="block text-sm font-medium text-ink-700 mb-2">Item Image</label>
         <div className="flex items-center gap-3">
-          <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
+          <div className="w-20 h-20 rounded-xl overflow-hidden bg-ink-100 shrink-0 border border-ink-200">
             {draft.image ? (
               <img src={draft.image} alt="preview" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No image</div>
+              <div className="w-full h-full flex items-center justify-center text-ink-300 text-xs">No image</div>
             )}
           </div>
           <label className="flex-1 cursor-pointer">
-            <span className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition">
+            <span className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-ink-300 text-sm font-medium text-ink-600 hover:border-ink-400 hover:bg-ink-50 transition">
               <Upload size={16} />
               Upload Image
             </span>
@@ -327,7 +327,7 @@ function ItemForm({
           {draft.image && (
             <button
               onClick={() => setDraft({ ...draft, image: '' })}
-              className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 transition"
+              className="p-2 rounded-lg bg-ink-100 text-ink-500 hover:bg-paprika-100 hover:text-paprika-600 transition"
             >
               <X size={16} />
             </button>
@@ -338,49 +338,49 @@ function ItemForm({
           value={draft.image.startsWith('data:') ? '' : draft.image}
           onChange={(e) => setDraft({ ...draft, image: e.target.value })}
           placeholder="...or paste image URL"
-          className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+          className="w-full mt-2 px-3 py-2 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Name</label>
+        <label className="block text-sm font-medium text-ink-700 mb-1.5">Name</label>
         <input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           placeholder="e.g. Margherita Pizza"
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+          className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
+        <label className="block text-sm font-medium text-ink-700 mb-1.5">Description</label>
         <textarea
           value={draft.description}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           placeholder="Short description..."
           rows={2}
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
+          className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 resize-none"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Price ({currency})</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1.5">Price ({currency})</label>
           <input
             type="number"
             min={0}
             step="0.01"
             value={draft.price || ''}
             onChange={(e) => setDraft({ ...draft, price: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+            className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1.5">Category</label>
           <select
             value={draft.category}
             onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+            className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 bg-white"
           >
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -394,22 +394,22 @@ function ItemForm({
           type="checkbox"
           checked={draft.available}
           onChange={(e) => setDraft({ ...draft, available: e.target.checked })}
-          className="w-4 h-4 accent-slate-900"
+          className="w-4 h-4 accent-ink-900"
         />
-        <span className="text-sm text-slate-700">Available for ordering</span>
+        <span className="text-sm text-ink-700">Available for ordering</span>
       </label>
 
       <div className="flex gap-3 pt-2">
         <button
           onClick={onCancel}
-          className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 transition"
+          className="flex-1 py-2.5 rounded-lg border border-ink-200 text-ink-700 font-medium text-sm hover:bg-ink-50 transition"
         >
           Cancel
         </button>
         <button
           onClick={onSave}
           disabled={!valid}
-          className="flex-1 py-2.5 rounded-lg bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 py-2.5 rounded-lg bg-ink-900 text-white font-semibold text-sm hover:bg-ink-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Save
         </button>
