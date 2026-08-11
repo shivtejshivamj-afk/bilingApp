@@ -16,6 +16,7 @@ import { useOrders, useSettings } from '@/lib/useLocalData';
 import { playNewOrderChime, playStatusChime } from '@/lib/audio';
 import { formatMoney, formatTime, timeAgo } from '@/lib/billing';
 import { StatusBadge } from '@/components/ui';
+import { OrderToastStack, ensureNotificationPermission, showOsNotification, type OrderToast } from '@/components/OrderToast';
 import ManualOrderModal from './ManualOrderModal';
 
 const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
@@ -26,8 +27,20 @@ export default function OrderManagement() {
   const { settings, setSettings } = useSettings();
   const [filter, setFilter] = useState<'active' | 'all'>('active');
   const [manualOpen, setManualOpen] = useState(false);
+  const [toasts, setToasts] = useState<OrderToast[]>([]);
   const audioReady = useRef(false);
   const prevOrderIds = useRef<Set<string>>(new Set());
+  const isFirstLoad = useRef(true);
+
+  const dismissToast = (id: string) => {
+    setToasts((current) => current.filter((t) => t.id !== id));
+  };
+
+  // Ask for OS notification permission once, so alerts still show if this
+  // tab isn't focused (e.g. staff on a different app/screen).
+  useEffect(() => {
+    ensureNotificationPermission();
+  }, []);
 
   // Unlock audio on first user interaction with the page
   useEffect(() => {
@@ -44,14 +57,26 @@ export default function OrderManagement() {
     };
   }, []);
 
-  // Track known order IDs and chime when a genuinely new one appears
+  // Track known order IDs and alert (sound + toast + OS notification) when a
+  // genuinely new order appears — skipped on the very first load so opening
+  // the page doesn't fire alerts for every already-existing order.
   useEffect(() => {
     const currentIds = new Set(orders.map((o) => o.id));
-    const newIds = [...currentIds].filter((id) => !prevOrderIds.current.has(id));
-    if (newIds.length > 0 && audioReady.current && settings.soundEnabled) {
-      playNewOrderChime();
+    const newOrders = orders.filter((o) => !prevOrderIds.current.has(o.id));
+
+    if (!isFirstLoad.current && newOrders.length > 0) {
+      if (audioReady.current && settings.soundEnabled) {
+        playNewOrderChime();
+      }
+      setToasts((current) => [
+        ...newOrders.map((o) => ({ id: o.id, tableNumber: o.tableNumber, itemCount: o.items.length })),
+        ...current,
+      ]);
+      newOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
     }
+
     prevOrderIds.current = currentIds;
+    isFirstLoad.current = false;
   }, [orders, settings.soundEnabled]);
 
   const toggleSound = () => {
@@ -116,6 +141,7 @@ export default function OrderManagement() {
 
   return (
     <div className="space-y-4">
+      <OrderToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold text-slate-900">Live Orders</h2>
