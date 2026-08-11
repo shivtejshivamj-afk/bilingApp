@@ -108,17 +108,17 @@ export default function Reports() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+        <h2 className="text-xl font-bold text-ink-900 flex items-center gap-2">
           <TrendingUp size={22} />
           Revenue Reports
         </h2>
-        <div className="flex gap-1.5 bg-slate-100 rounded-xl p-1">
+        <div className="flex gap-1.5 bg-ink-100 rounded-xl p-1">
           {RANGE_OPTIONS.map((opt) => (
             <button
               key={opt.key}
               onClick={() => setRange(opt.key)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                range === opt.key ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                range === opt.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
               }`}
             >
               {opt.label}
@@ -146,16 +146,16 @@ export default function Reports() {
       </div>
 
       {!hasData ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center text-slate-400">
-          <TrendingUp size={40} className="mx-auto mb-3 text-slate-300" />
+        <div className="bg-white rounded-2xl border border-ink-200 p-16 text-center text-ink-400">
+          <TrendingUp size={40} className="mx-auto mb-3 text-ink-300" />
           <p className="font-medium">No sales in this period yet.</p>
           <p className="text-sm mt-1">Bills you generate will show up here automatically.</p>
         </div>
       ) : (
         <>
           {/* Revenue trend */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-900 mb-4">Revenue Trend</h3>
+          <div className="bg-white rounded-2xl border border-ink-200 p-5">
+            <h3 className="font-semibold text-ink-900 mb-4">Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={dailySeries} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -184,8 +184,8 @@ export default function Reports() {
 
           <div className="grid md:grid-cols-2 gap-5">
             {/* Top items bar chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold text-slate-900 mb-4">Top Items by Revenue</h3>
+            <div className="bg-white rounded-2xl border border-ink-200 p-5">
+              <h3 className="font-semibold text-ink-900 mb-4">Top Items by Revenue</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={topItems} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
@@ -209,8 +209,8 @@ export default function Reports() {
             </div>
 
             {/* Item mix pie chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5">
-              <h3 className="font-semibold text-slate-900 mb-4">Item Mix (by quantity)</h3>
+            <div className="bg-white rounded-2xl border border-ink-200 p-5">
+              <h3 className="font-semibold text-ink-900 mb-4">Item Mix (by quantity)</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie
@@ -254,18 +254,18 @@ function SummaryCard({
   accent: 'emerald' | 'sky' | 'amber' | 'violet';
 }) {
   const accentClasses: Record<typeof accent, string> = {
-    emerald: 'bg-emerald-100 text-emerald-700',
-    sky: 'bg-sky-100 text-sky-700',
-    amber: 'bg-amber-100 text-amber-700',
-    violet: 'bg-violet-100 text-violet-700',
+    emerald: 'bg-basil-100 text-basil-700',
+    sky: 'bg-ink-100 text-ink-700',
+    amber: 'bg-saffron-100 text-saffron-700',
+    violet: 'bg-basil-100 text-basil-700',
   };
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
+    <div className="bg-white rounded-2xl border border-ink-200 p-4">
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 ${accentClasses[accent]}`}>
         {icon}
       </div>
-      <p className="text-xs text-slate-500 font-medium">{label}</p>
-      <p className="text-xl font-bold text-slate-900 mt-0.5 truncate">{value}</p>
+      <p className="text-xs text-ink-500 font-medium">{label}</p>
+      <p className="text-xl font-bold text-ink-900 mt-0.5 truncate">{value}</p>
     </div>
   );
 }
