@@ -64,9 +64,9 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="min-h-screen bg-parchment-100 flex">
       {/* Sidebar — desktop */}
-      <aside className="hidden md:flex w-60 bg-slate-900 flex-col fixed inset-y-0 left-0 z-30">
+      <aside className="hidden md:flex w-60 bg-ink-900 flex-col fixed inset-y-0 left-0 z-30">
         <SidebarContent
           tab={tab}
           onNav={navClick}
@@ -80,7 +80,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       {sidebarOpen && (
         <div className="md:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 bg-slate-900 flex flex-col animate-[slideRight_0.2s_ease]">
+          <aside className="absolute inset-y-0 left-0 w-64 bg-ink-900 flex flex-col animate-[slideRight_0.2s_ease]">
             <SidebarContent
               tab={tab}
               onNav={navClick}
@@ -95,26 +95,26 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       {/* Main */}
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-ink-100 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-700"
+              className="md:hidden p-2 -ml-2 rounded-lg hover:bg-ink-100 text-ink-700 transition-colors"
             >
               <MenuIcon size={22} />
             </button>
-            <h1 className="text-lg font-bold text-slate-900 capitalize">{tab === 'qr' ? 'QR Codes' : tab}</h1>
+            <h1 className="text-lg font-bold font-display text-ink-900 capitalize">{tab === 'qr' ? 'QR Codes' : tab}</h1>
           </div>
           <div className="flex items-center gap-2">
             {newCount > 0 && (
-              <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-100 text-rose-700 text-sm font-semibold animate-pulse">
+              <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-paprika-100 text-paprika-700 text-sm font-semibold animate-pulse">
                 <Bell size={14} />
                 {newCount} new order{newCount !== 1 ? 's' : ''}
               </span>
             )}
             <button
               onClick={logout}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+              className="p-2 rounded-lg hover:bg-ink-100 text-ink-600 transition-colors"
               title="Log out"
             >
               <LogOut size={20} />
@@ -124,7 +124,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* New order flash banner */}
         {newFlash && (
-          <div className="bg-emerald-500 text-white text-center text-sm font-semibold py-1.5 animate-[slideDown_0.2s_ease]">
+          <div className="bg-basil-500 text-white text-center text-sm font-semibold py-1.5 animate-[slideDown_0.2s_ease]">
             New order received
           </div>
         )}
@@ -136,7 +136,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           {tab === 'menu' && <MenuManager />}
           {tab === 'qr' && <QRGenerator />}
           {tab === 'reports' && (
-            <Suspense fallback={<div className="py-20 text-center text-slate-400">Loading reports…</div>}>
+            <Suspense fallback={<div className="py-20 text-center text-ink-400">Loading reports…</div>}>
               <Reports />
             </Suspense>
           )}
@@ -162,14 +162,14 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="px-5 py-5 border-b border-slate-700/50">
+      <div className="px-5 py-5 border-b border-ink-700/50">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center">
-            <UtensilsCrossed className="text-slate-900" size={20} />
+          <div className="w-9 h-9 rounded-xl bg-paprika-500 flex items-center justify-center">
+            <UtensilsCrossed className="text-white" size={20} />
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-white text-sm truncate">{restaurantName}</p>
-            <p className="text-xs text-slate-400">Staff Dashboard</p>
+            <p className="font-bold font-display text-white text-sm truncate">{restaurantName}</p>
+            <p className="text-xs text-ink-400">Staff Dashboard</p>
           </div>
         </div>
       </div>
@@ -181,14 +181,14 @@ function SidebarContent({
             <button
               key={t.id}
               onClick={() => onNav(t.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
-                active ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-slate-800'
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                active ? 'bg-paprika-500 text-white shadow-md' : 'text-ink-300 hover:bg-ink-800 hover:text-white'
               }`}
             >
               <Icon size={18} />
               <span className="flex-1 text-left">{t.label}</span>
               {t.id === 'orders' && newCount > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${active ? 'bg-rose-500 text-white' : 'bg-rose-500 text-white'}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${active ? 'bg-white text-paprika-600' : 'bg-paprika-500 text-white'}`}>
                   {newCount}
                 </span>
               )}
@@ -196,10 +196,10 @@ function SidebarContent({
           );
         })}
       </nav>
-      <div className="px-3 py-4 border-t border-slate-700/50">
+      <div className="px-3 py-4 border-t border-ink-700/50">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-ink-300 hover:bg-ink-800 hover:text-white transition-colors"
         >
           <LogOut size={18} />
           Log Out
