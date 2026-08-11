@@ -150,9 +150,9 @@ export default function OrderManagement() {
       <OrderToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-slate-900">Live Orders</h2>
+          <h2 className="text-xl font-bold font-display text-ink-900">Live Orders</h2>
           {newCount > 0 && (
-            <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-xs font-bold animate-pulse">
+            <span className="px-2.5 py-0.5 rounded-full bg-paprika-500 text-white text-xs font-bold animate-pulse">
               {newCount} NEW
             </span>
           )}
@@ -160,28 +160,28 @@ export default function OrderManagement() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setManualOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold flex items-center gap-2 hover:bg-emerald-700 transition shadow-sm"
+            className="px-4 py-2.5 rounded-xl bg-basil-500 text-white text-sm font-semibold flex items-center gap-2 hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-sm hover:shadow-md"
           >
             <Plus size={18} />
             New Manual Order
           </button>
-          <div className="flex rounded-lg bg-slate-100 p-0.5">
+          <div className="flex rounded-lg bg-ink-100 p-0.5">
             <button
               onClick={() => setFilter('active')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${filter === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'active' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
             >
               Active
             </button>
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${filter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'all' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
             >
               All
             </button>
           </div>
           <button
             onClick={toggleSound}
-            className={`p-2 rounded-lg transition ${soundEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+            className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-basil-100 text-basil-700' : 'bg-ink-100 text-ink-400'}`}
             title={soundEnabled ? 'Sound on' : 'Sound off'}
           >
             {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
@@ -190,10 +190,10 @@ export default function OrderManagement() {
       </div>
 
       {visibleOrders.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center">
-          <Bell size={48} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-400 font-medium">No active orders right now.</p>
-          <p className="text-slate-400 text-sm mt-1">New customer orders will appear here instantly.</p>
+        <div className="bg-white rounded-2xl border border-ink-200 py-20 text-center">
+          <Bell size={48} className="mx-auto text-ink-300 mb-3" />
+          <p className="text-ink-400 font-medium">No active orders right now.</p>
+          <p className="text-ink-400 text-sm mt-1">New customer orders will appear here instantly.</p>
         </div>
       )}
 
@@ -235,35 +235,35 @@ function OrderCard({
   onCancelOrder: () => void;
 }) {
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition ${isNew ? 'border-rose-400 ring-2 ring-rose-200 animate-[pop_0.3s_ease]' : 'border-slate-200'}`}>
-      <div className={`px-4 py-3 flex items-center justify-between ${isNew ? 'bg-rose-50' : 'bg-slate-50'}`}>
+    <div className={`bg-white rounded-2xl border shadow-ticket overflow-hidden transition-all ${isNew ? 'border-paprika-400 ring-2 ring-paprika-200 animate-ticket-print' : 'border-ink-200'}`}>
+      <div className={`px-4 py-3 flex items-center justify-between ${isNew ? 'bg-paprika-50' : 'bg-ink-50'}`}>
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${isNew ? 'bg-rose-500 text-white' : 'bg-slate-900 text-white'}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold font-display ${isNew ? 'bg-paprika-500 text-white' : 'bg-ink-900 text-white'}`}>
             T{order.tableNumber}
           </div>
           <div>
-            <p className="font-bold text-slate-900 text-sm">Table {order.tableNumber}</p>
-            <p className="text-xs text-slate-500">{timeAgo(order.createdAt)} · {formatTime(order.createdAt)}</p>
+            <p className="font-bold text-ink-900 text-sm">Table {order.tableNumber}</p>
+            <p className="text-xs text-ink-500 font-mono">{timeAgo(order.createdAt)} · {formatTime(order.createdAt)}</p>
           </div>
         </div>
         <StatusBadge status={order.status} />
       </div>
 
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-ink-100">
         {order.items.map((item, idx) => (
           <div key={idx} className="px-4 py-3 flex items-center gap-3 group">
             <div className="flex-1">
-              <p className="font-medium text-slate-900 text-sm">
-                <span className="text-slate-500">{item.quantity}×</span> {item.name}
+              <p className="font-medium text-ink-900 text-sm">
+                <span className="text-ink-500">{item.quantity}×</span> {item.name}
               </p>
-              <p className="text-xs text-slate-400">{formatMoney(item.price * item.quantity, currency)}</p>
+              <p className="text-xs text-ink-400 font-mono">{formatMoney(item.price * item.quantity, currency)}</p>
             </div>
             <button
               onClick={() => onAdvanceItem(idx)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                item.status === 'Pending' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' :
+                item.status === 'Pending' ? 'bg-saffron-100 text-saffron-800 hover:bg-saffron-200' :
                 item.status === 'Cooking' ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' :
-                'bg-emerald-100 text-emerald-700'
+                'bg-basil-100 text-basil-700'
               }`}
             >
               {item.status === 'Pending' && <Clock size={14} />}
@@ -273,7 +273,7 @@ function OrderCard({
             </button>
             <button
               onClick={() => onRemoveItem(idx)}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition opacity-0 group-hover:opacity-100"
+              className="p-1.5 rounded-lg text-ink-300 hover:text-paprika-600 hover:bg-paprika-50 transition-colors opacity-0 group-hover:opacity-100"
               title="Remove item"
             >
               <X size={15} />
@@ -283,21 +283,21 @@ function OrderCard({
       </div>
 
       {order.customerNote && (
-        <div className="px-4 py-2 bg-amber-50 text-xs text-amber-800 border-t border-amber-100">
+        <div className="px-4 py-2 bg-saffron-50 text-xs text-saffron-800 border-t border-saffron-100">
           Customer note: {order.customerNote}
         </div>
       )}
 
-      <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+      <div className="px-4 py-3 bg-ink-50 border-t border-ink-100 flex items-center justify-between ticket-edge text-ink-200">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400">Total</span>
-          <span className="font-bold text-slate-900">{formatMoney(order.total, currency)}</span>
+          <span className="text-xs text-ink-400">Total</span>
+          <span className="font-bold font-mono text-ink-900">{formatMoney(order.total, currency)}</span>
         </div>
         <div className="flex items-center gap-2">
           {order.status !== 'Billed' && (
             <button
               onClick={onCancelOrder}
-              className="px-3 py-2 rounded-lg bg-rose-50 text-rose-600 text-sm font-semibold hover:bg-rose-100 transition flex items-center gap-1.5"
+              className="px-3 py-2 rounded-lg bg-paprika-50 text-paprika-600 text-sm font-semibold hover:bg-paprika-100 transition-colors flex items-center gap-1.5"
             >
               <Trash2 size={14} />
               Cancel
@@ -306,7 +306,7 @@ function OrderCard({
           {isNew && (
             <button
               onClick={onAcknowledge}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5"
             >
               <Utensils size={14} />
               Acknowledge
