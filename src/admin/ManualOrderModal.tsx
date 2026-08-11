@@ -120,11 +120,11 @@ export default function ManualOrderModal({
       <div className="space-y-4">
         {/* Table selector */}
         <div className="flex items-center gap-3">
-          <label className="text-sm font-semibold text-slate-700 whitespace-nowrap">Table:</label>
+          <label className="text-sm font-semibold text-ink-700 whitespace-nowrap">Table:</label>
           <select
             value={tableNumber}
             onChange={(e) => setTableNumber(Number(e.target.value))}
-            className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+            className="px-3 py-2.5 rounded-lg border border-ink-200 text-sm font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-900 bg-white"
           >
             {tables.map((t) => (
               <option key={t} value={t}>
@@ -133,7 +133,7 @@ export default function ManualOrderModal({
             ))}
           </select>
           {cartCount > 0 && (
-            <span className="ml-auto px-3 py-1.5 rounded-full bg-slate-900 text-white text-sm font-semibold flex items-center gap-1.5">
+            <span className="ml-auto px-3 py-1.5 rounded-full bg-ink-900 text-white text-sm font-semibold flex items-center gap-1.5">
               <ShoppingBag size={14} />
               {cartCount} item{cartCount !== 1 ? 's' : ''}
             </span>
@@ -142,12 +142,12 @@ export default function ManualOrderModal({
 
         {/* Search + categories */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={18} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search dishes..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-ink-100 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 focus:bg-white transition"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
@@ -157,8 +157,8 @@ export default function ManualOrderModal({
               onClick={() => setActiveCategory(cat)}
               className={`px-3.5 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${
                 activeCategory === cat
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-ink-900 text-white'
+                  : 'bg-ink-100 text-ink-600 hover:bg-ink-200'
               }`}
             >
               {cat}
@@ -169,7 +169,7 @@ export default function ManualOrderModal({
         {/* Menu grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[40vh] overflow-y-auto pr-1">
           {filtered.length === 0 && (
-            <div className="col-span-full text-center text-slate-400 py-10 text-sm">
+            <div className="col-span-full text-center text-ink-400 py-10 text-sm">
               No dishes found.
             </div>
           )}
@@ -180,24 +180,24 @@ export default function ManualOrderModal({
                 key={item.id}
                 onClick={() => addToCart(item)}
                 className={`relative text-left bg-white rounded-xl border overflow-hidden transition hover:shadow-md active:scale-[0.98] ${
-                  inCart ? 'border-slate-900 ring-2 ring-slate-900 ring-offset-1' : 'border-slate-200'
+                  inCart ? 'border-ink-900 ring-2 ring-ink-900 ring-offset-1' : 'border-ink-200'
                 }`}
               >
-                <div className="h-20 bg-slate-100">
+                <div className="h-20 bg-ink-100">
                   {item.image ? (
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                    <div className="w-full h-full flex items-center justify-center text-ink-300">
                       <UtensilsCrossed size={20} />
                     </div>
                   )}
                 </div>
                 <div className="p-2">
-                  <p className="font-semibold text-slate-900 text-xs leading-tight line-clamp-2">{item.name}</p>
-                  <p className="text-xs font-bold text-slate-900 mt-1">{formatMoney(item.price, settings.currency)}</p>
+                  <p className="font-semibold text-ink-900 text-xs leading-tight line-clamp-2">{item.name}</p>
+                  <p className="text-xs font-bold text-ink-900 mt-1">{formatMoney(item.price, settings.currency)}</p>
                 </div>
                 {inCart && (
-                  <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">
+                  <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-ink-900 text-white text-xs font-bold flex items-center justify-center">
                     {inCart.quantity}
                   </span>
                 )}
@@ -208,49 +208,49 @@ export default function ManualOrderModal({
 
         {/* Cart */}
         {cart.length > 0 && (
-          <div className="border-t border-slate-200 pt-3 space-y-2">
-            <p className="text-sm font-semibold text-slate-700">Order Items</p>
+          <div className="border-t border-ink-200 pt-3 space-y-2">
+            <p className="text-sm font-semibold text-ink-700">Order Items</p>
             <div className="space-y-1.5 max-h-32 overflow-y-auto">
               {cart.map((line) => (
                 <div key={line.menuItemId} className="flex items-center gap-2 text-sm">
-                  <span className="flex-1 text-slate-900 font-medium">{line.name}</span>
+                  <span className="flex-1 text-ink-900 font-medium">{line.name}</span>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => changeQty(line.menuItemId, -1)}
-                      className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center hover:bg-slate-200"
+                      className="w-7 h-7 rounded-lg bg-ink-100 text-ink-700 flex items-center justify-center hover:bg-ink-200"
                     >
                       <Minus size={14} />
                     </button>
                     <span className="w-6 text-center font-semibold">{line.quantity}</span>
                     <button
                       onClick={() => changeQty(line.menuItemId, 1)}
-                      className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center hover:bg-slate-800"
+                      className="w-7 h-7 rounded-lg bg-ink-900 text-white flex items-center justify-center hover:bg-ink-800"
                     >
                       <Plus size={14} />
                     </button>
                   </div>
-                  <span className="w-16 text-right font-semibold text-slate-900">
+                  <span className="w-16 text-right font-semibold text-ink-900">
                     {formatMoney(line.price * line.quantity, settings.currency)}
                   </span>
                   <button
                     onClick={() => removeLine(line.menuItemId)}
-                    className="p-1 rounded text-slate-400 hover:text-rose-600"
+                    className="p-1 rounded text-ink-400 hover:text-paprika-600"
                   >
                     <X size={15} />
                   </button>
                 </div>
               ))}
             </div>
-            <div className="space-y-1 pt-2 border-t border-slate-100">
-              <div className="flex justify-between text-sm text-slate-600">
+            <div className="space-y-1 pt-2 border-t border-ink-100">
+              <div className="flex justify-between text-sm text-ink-600">
                 <span>Subtotal</span>
                 <span>{formatMoney(subtotal, settings.currency)}</span>
               </div>
-              <div className="flex justify-between text-sm text-slate-600">
+              <div className="flex justify-between text-sm text-ink-600">
                 <span>Tax ({settings.taxRate}%)</span>
                 <span>{formatMoney(tax, settings.currency)}</span>
               </div>
-              <div className="flex justify-between font-bold text-slate-900">
+              <div className="flex justify-between font-bold text-ink-900">
                 <span>Total</span>
                 <span>{formatMoney(total, settings.currency)}</span>
               </div>
@@ -262,14 +262,14 @@ export default function ManualOrderModal({
         <div className="flex gap-3 pt-1">
           <button
             onClick={handleClose}
-            className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 transition"
+            className="flex-1 py-3 rounded-xl border border-ink-200 text-ink-700 font-medium text-sm hover:bg-ink-50 transition"
           >
             Cancel
           </button>
           <button
             onClick={() => setConfirming(true)}
             disabled={cart.length === 0}
-            className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 py-3 rounded-xl bg-basil-600 text-white font-bold text-sm hover:bg-basil-700 transition flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send size={16} />
             Confirm Manual Order
@@ -281,20 +281,20 @@ export default function ManualOrderModal({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirming(false)} />
           <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Send order to Table {tableNumber}?</h3>
-            <p className="text-sm text-slate-600 mb-5">
+            <h3 className="text-lg font-bold text-ink-900 mb-2">Send order to Table {tableNumber}?</h3>
+            <p className="text-sm text-ink-600 mb-5">
               This will add {cartCount} item{cartCount !== 1 ? 's' : ''} ({formatMoney(total, settings.currency)}) to Table {tableNumber}'s bill, just like a customer order.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setConfirming(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-ink-700 hover:bg-ink-100 transition"
               >
                 Back
               </button>
               <button
                 onClick={confirmOrder}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition"
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-basil-600 hover:bg-basil-700 transition"
               >
                 Send Order
               </button>
