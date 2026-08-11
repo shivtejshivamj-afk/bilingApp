@@ -32,6 +32,34 @@ function getTableFromUrl(): number | null {
   return raw && !isNaN(n) && n > 0 ? n : null;
 }
 
+// When multiple customers share the same device at a table (e.g. a tablet
+// left at the table rather than each guest's own phone), this timestamp
+// marks where the CURRENT customer's session starts. Orders placed before
+// it belong to a previous customer and are hidden from view on this device
+// once someone taps "New Customer" — without touching the actual order data,
+// which staff still see in full for billing.
+function sessionStartKey(tableNumber: number) {
+  return `rbs_customer_session_start_table_${tableNumber}`;
+}
+
+function getSessionStart(tableNumber: number): number {
+  try {
+    const raw = localStorage.getItem(sessionStartKey(tableNumber));
+    return raw ? Number(raw) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setSessionStart(tableNumber: number, value: number) {
+  try {
+    localStorage.setItem(sessionStartKey(tableNumber), String(value));
+  } catch {
+    // Ignore write failures (e.g. private browsing) — filtering just won't
+    // persist across a full page reload in that case.
+  }
+}
+
 export default function CustomerApp() {
   const { menu } = useMenu();
   const { settings } = useSettings();
@@ -46,6 +74,28 @@ export default function CustomerApp() {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [note, setNote] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [sessionStart, setSessionStartState] = useState<number>(() =>
+    tableNumber != null ? getSessionStart(tableNumber) : 0
+  );
+
+  // Orders visible to THIS customer session — hides a previous customer's
+  // orders on shared table devices once "New Customer" has been tapped,
+  // without affecting the real order data staff use for billing.
+  const visibleOrders = useMemo(
+    () => myOrders.filter((o) => o.createdAt >= sessionStart),
+    [myOrders, sessionStart]
+  );
+
+  const startNewCustomerSession = useCallback(() => {
+    if (tableNumber == null) return;
+    const now = Date.now();
+    setSessionStart(tableNumber, now);
+    setSessionStartState(now);
+    setCart([]);
+    setNote('');
+    setView('menu');
+    showToast('Ready for a new order!');
+  }, [tableNumber]);
 
   // Load my orders for this table from Supabase
   useEffect(() => {
@@ -224,15 +274,28 @@ export default function CustomerApp() {
         </header>
 
         <div className="max-w-md mx-auto px-4 py-4 space-y-4">
-          {myOrders.length === 0 && (
+          {visibleOrders.length === 0 && (
             <div className="text-center py-20 text-slate-400">
               <Clock size={48} className="mx-auto mb-3" />
               <p>No orders yet. Start ordering from the menu.</p>
             </div>
           )}
-          {myOrders.map((order) => (
+          {visibleOrders.map((order) => (
             <OrderTrackingCard key={order.id} order={order} currency={settings.currency} />
           ))}
+
+          {visibleOrders.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm('Finish this order and hand off to the next customer? Your order will still be billed by staff — this just clears the view on this screen for someone new.')) {
+                  startNewCustomerSession();
+                }
+              }}
+              className="w-full py-3 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-100 transition mt-2"
+            >
+              My order is done — start fresh for a new customer
+            </button>
+          )}
         </div>
       </div>
     );
@@ -255,9 +318,9 @@ export default function CustomerApp() {
               className="relative p-2.5 rounded-xl bg-slate-100 text-slate-700"
             >
               <Bell size={20} />
-              {myOrders.length > 0 && (
+              {visibleOrders.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {myOrders.length}
+                  {visibleOrders.length}
                 </span>
               )}
             </button>
