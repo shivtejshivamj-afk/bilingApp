@@ -29,8 +29,15 @@ export default function OrderManagement() {
   const [manualOpen, setManualOpen] = useState(false);
   const [toasts, setToasts] = useState<OrderToast[]>([]);
   const audioReady = useRef(false);
-  const prevOrderIds = useRef<Set<string>>(new Set());
-  const isFirstLoad = useRef(true);
+  // Orders created before this component mounted are "old" — we only ever
+  // alert for orders whose createdAt is after this timestamp. This avoids
+  // any race with the initial load (which can update state more than once
+  // as the fetch and the realtime subscription both resolve) incorrectly
+  // treating existing orders as new.
+  const mountedAt = useRef(Date.now());
+  // Guards against alerting twice for the same order, in case a realtime
+  // event or a state update happens to fire more than once for it.
+  const alertedIds = useRef<Set<string>>(new Set());
 
   const dismissToast = (id: string) => {
     setToasts((current) => current.filter((t) => t.id !== id));
@@ -57,26 +64,24 @@ export default function OrderManagement() {
     };
   }, []);
 
-  // Track known order IDs and alert (sound + toast + OS notification) when a
-  // genuinely new order appears — skipped on the very first load so opening
-  // the page doesn't fire alerts for every already-existing order.
+  // Alert (sound + toast + OS notification) only for orders placed after
+  // this component mounted, and only once per order id.
   useEffect(() => {
-    const currentIds = new Set(orders.map((o) => o.id));
-    const newOrders = orders.filter((o) => !prevOrderIds.current.has(o.id));
+    const freshOrders = orders.filter(
+      (o) => o.createdAt > mountedAt.current && !alertedIds.current.has(o.id)
+    );
+    if (freshOrders.length === 0) return;
 
-    if (!isFirstLoad.current && newOrders.length > 0) {
-      if (audioReady.current && settings.soundEnabled) {
-        playNewOrderChime();
-      }
-      setToasts((current) => [
-        ...newOrders.map((o) => ({ id: o.id, tableNumber: o.tableNumber, itemCount: o.items.length })),
-        ...current,
-      ]);
-      newOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
+    freshOrders.forEach((o) => alertedIds.current.add(o.id));
+
+    if (audioReady.current && settings.soundEnabled) {
+      playNewOrderChime();
     }
-
-    prevOrderIds.current = currentIds;
-    isFirstLoad.current = false;
+    setToasts((current) => [
+      ...freshOrders.map((o) => ({ id: o.id, tableNumber: o.tableNumber, itemCount: o.items.length })),
+      ...current,
+    ]);
+    freshOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
   }, [orders, settings.soundEnabled]);
 
   const toggleSound = () => {
