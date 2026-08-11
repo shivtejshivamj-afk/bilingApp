@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { Order, OrderItem, OrderItemStatus } from '@/types';
-import { useOrders, useSettings } from '@/lib/useLocalData';
+import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
 import { playNewOrderChime, playStatusChime } from '@/lib/audio';
 import { formatMoney, formatTime, timeAgo } from '@/lib/billing';
 import { StatusBadge } from '@/components/ui';
@@ -24,7 +24,8 @@ const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed']
 
 export default function OrderManagement() {
   const { orders, patchOrder } = useOrders();
-  const { settings, setSettings } = useSettings();
+  const { settings } = useSettings();
+  const { soundEnabled, setSoundEnabled } = useSoundPreference();
   const [filter, setFilter] = useState<'active' | 'all'>('active');
   const [manualOpen, setManualOpen] = useState(false);
   const [toasts, setToasts] = useState<OrderToast[]>([]);
@@ -74,7 +75,7 @@ export default function OrderManagement() {
 
     freshOrders.forEach((o) => alertedIds.current.add(o.id));
 
-    if (audioReady.current && settings.soundEnabled) {
+    if (audioReady.current && soundEnabled) {
       playNewOrderChime();
     }
     setToasts((current) => [
@@ -82,12 +83,12 @@ export default function OrderManagement() {
       ...current,
     ]);
     freshOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
-  }, [orders, settings.soundEnabled]);
+  }, [orders, soundEnabled]);
 
   const toggleSound = () => {
     audioReady.current = true;
-    setSettings({ ...settings, soundEnabled: !settings.soundEnabled });
-    if (!settings.soundEnabled) playNewOrderChime();
+    setSoundEnabled(!soundEnabled);
+    if (!soundEnabled) playNewOrderChime();
   };
 
   const advanceItem = (orderId: string, itemIdx: number) => {
@@ -180,10 +181,10 @@ export default function OrderManagement() {
           </div>
           <button
             onClick={toggleSound}
-            className={`p-2 rounded-lg transition ${settings.soundEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
-            title={settings.soundEnabled ? 'Sound on' : 'Sound off'}
+            className={`p-2 rounded-lg transition ${soundEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+            title={soundEnabled ? 'Sound on' : 'Sound off'}
           >
-            {settings.soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
           </button>
         </div>
       </div>
