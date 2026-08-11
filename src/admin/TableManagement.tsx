@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Receipt, Users, Clock, DollarSign, Printer, X, CheckCircle2, Download } from 'lucide-react';
+import { Table2, Users, Clock, Wallet, Printer, X, CheckCircle2, Download, Receipt } from 'lucide-react';
 import type { Order, SalesLog } from '@/types';
 import { useOrders, useSettings } from '@/lib/useLocalData';
 import { addSale } from '@/lib/storage';
@@ -91,7 +91,7 @@ export default function TableManagement() {
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="flex items-center gap-2 text-slate-500 mb-1">
-            <DollarSign size={16} />
+            <Wallet size={16} />
             <span className="text-xs font-medium">Open Bills</span>
           </div>
           <p className="text-2xl font-bold text-emerald-600">{formatMoney(grandTotal, settings.currency)}</p>
@@ -100,7 +100,7 @@ export default function TableManagement() {
 
       {tables.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center">
-          <Receipt size={48} className="mx-auto text-slate-300 mb-3" />
+          <Table2 size={48} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-400 font-medium">No active tables.</p>
           <p className="text-slate-400 text-sm mt-1">Tables with open orders will appear here.</p>
         </div>
