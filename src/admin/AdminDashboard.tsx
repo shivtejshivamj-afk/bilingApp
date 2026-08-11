@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy } from 'react';
 import {
   ClipboardList,
   Table2,
@@ -9,6 +10,7 @@ import {
   Menu as MenuIcon,
   X,
   Bell,
+  TrendingUp,
 } from 'lucide-react';
 import { useOrders, useSettings } from '@/lib/useLocalData';
 import OrderManagement from './OrderManagement';
@@ -17,13 +19,16 @@ import MenuManager from './MenuManager';
 import QRGenerator from './QRGenerator';
 import AdminSettings from './AdminSettings';
 
-type Tab = 'orders' | 'tables' | 'menu' | 'qr' | 'settings';
+const Reports = lazy(() => import('./Reports'));
+
+type Tab = 'orders' | 'tables' | 'menu' | 'qr' | 'reports' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
   { id: 'orders', label: 'Orders', icon: ClipboardList },
   { id: 'tables', label: 'Tables', icon: Table2 },
   { id: 'menu', label: 'Menu', icon: UtensilsCrossed },
   { id: 'qr', label: 'QR Codes', icon: QrCode },
+  { id: 'reports', label: 'Reports', icon: TrendingUp },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -130,6 +135,11 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           {tab === 'tables' && <TableManagement />}
           {tab === 'menu' && <MenuManager />}
           {tab === 'qr' && <QRGenerator />}
+          {tab === 'reports' && (
+            <Suspense fallback={<div className="py-20 text-center text-slate-400">Loading reports…</div>}>
+              <Reports />
+            </Suspense>
+          )}
           {tab === 'settings' && <AdminSettings />}
         </main>
       </div>
