@@ -144,6 +144,35 @@ export function useOrders() {
   return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable };
 }
 
+// Sound preference is intentionally per-device (not synced through Supabase
+// like the rest of Settings) — whether staff want a chime on THIS terminal
+// is a local choice, not a restaurant-wide one. Storing it any other way
+// means one device muting itself would mute every other device too.
+const SOUND_PREF_KEY = 'rbs_sound_enabled';
+
+export function useSoundPreference() {
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(SOUND_PREF_KEY);
+      return raw === null ? true : raw === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const setSoundEnabled = useCallback((next: boolean) => {
+    setSoundEnabledState(next);
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, String(next));
+    } catch {
+      // Ignore write failures (e.g. private browsing) — the in-memory
+      // state for this session still works.
+    }
+  }, []);
+
+  return { soundEnabled, setSoundEnabled };
+}
+
 export function useSettings() {
   // Start from the local cache immediately (so the UI has something to show
   // right away), then reconcile with Supabase — the shared source of truth
