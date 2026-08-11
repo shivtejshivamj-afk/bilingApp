@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Save, Trash2, DollarSign } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Trash2, Wallet } from 'lucide-react';
 import { useSettings } from '@/lib/useLocalData';
 import { clearAllData } from '@/lib/storage';
 import { ConfirmDialog } from '@/components/ui';
@@ -84,15 +84,9 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.soundEnabled}
-            onChange={(e) => setForm({ ...form, soundEnabled: e.target.checked })}
-            className="w-4 h-4 accent-slate-900"
-          />
-          <span className="text-sm text-slate-700">Audio alerts for new orders</span>
-        </label>
+        <p className="text-xs text-slate-400 -mt-2">
+          Sound alerts for new orders can be toggled per-device from the Orders page.
+        </p>
 
         <button
           onClick={save}
@@ -106,7 +100,7 @@ export default function AdminSettings() {
       {/* Sales summary */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
-          <DollarSign size={18} />
+          <Wallet size={18} />
           Today's Sales
         </h3>
         <SalesSummary currency={settings.currency} />
