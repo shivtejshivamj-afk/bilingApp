@@ -77,66 +77,66 @@ export default function TableManagement() {
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 text-slate-500 mb-1">
+        <div className="bg-white rounded-2xl border border-ink-200 p-4">
+          <div className="flex items-center gap-2 text-ink-500 mb-1">
             <Users size={16} />
             <span className="text-xs font-medium">Active Tables</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{activeTables}</p>
+          <p className="text-2xl font-bold text-ink-900">{activeTables}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 text-slate-500 mb-1">
+        <div className="bg-white rounded-2xl border border-ink-200 p-4">
+          <div className="flex items-center gap-2 text-ink-500 mb-1">
             <Clock size={16} />
             <span className="text-xs font-medium">Pending Items</span>
           </div>
-          <p className="text-2xl font-bold text-amber-600">{totalPending}</p>
+          <p className="text-2xl font-bold text-saffron-600">{totalPending}</p>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 text-slate-500 mb-1">
+        <div className="bg-white rounded-2xl border border-ink-200 p-4">
+          <div className="flex items-center gap-2 text-ink-500 mb-1">
             <Wallet size={16} />
             <span className="text-xs font-medium">Open Bills</span>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{formatMoney(grandTotal, settings.currency)}</p>
+          <p className="text-2xl font-bold text-basil-600">{formatMoney(grandTotal, settings.currency)}</p>
         </div>
       </div>
 
       {tables.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center">
-          <Table2 size={48} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-400 font-medium">No active tables.</p>
-          <p className="text-slate-400 text-sm mt-1">Tables with open orders will appear here.</p>
+        <div className="bg-white rounded-2xl border border-ink-200 py-20 text-center">
+          <Table2 size={48} className="mx-auto text-ink-300 mb-3" />
+          <p className="text-ink-400 font-medium">No active tables.</p>
+          <p className="text-ink-400 text-sm mt-1">Tables with open orders will appear here.</p>
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tables.map((t) => (
-          <div key={t.number} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+          <div key={t.number} className="bg-white rounded-2xl border border-ink-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-ink-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-bold">
                   {t.number}
                 </div>
                 <div>
                   <p className="font-bold">Table {t.number}</p>
-                  <p className="text-xs text-slate-300">{t.orders.length} order{t.orders.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-ink-300">{t.orders.length} order{t.orders.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
               {t.pendingItems > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-saffron-500 text-white text-xs font-bold">
                   {t.pendingItems} pending
                 </span>
               )}
             </div>
             <div className="px-4 py-3 space-y-1 text-sm">
-              <div className="flex justify-between text-slate-600">
+              <div className="flex justify-between text-ink-600">
                 <span>Subtotal</span>
                 <span>{formatMoney(t.subtotal, settings.currency)}</span>
               </div>
-              <div className="flex justify-between text-slate-600">
+              <div className="flex justify-between text-ink-600">
                 <span>Tax ({settings.taxRate}%)</span>
                 <span>{formatMoney(t.tax, settings.currency)}</span>
               </div>
-              <div className="flex justify-between font-bold text-slate-900 text-base pt-1 border-t border-slate-100 mt-1">
+              <div className="flex justify-between font-bold text-ink-900 text-base pt-1 border-t border-ink-100 mt-1">
                 <span>Total</span>
                 <span>{formatMoney(t.total, settings.currency)}</span>
               </div>
@@ -144,14 +144,14 @@ export default function TableManagement() {
             <div className="px-4 pb-4 flex gap-2">
               <button
                 onClick={() => setBillTable(t.number)}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5 transition"
+                className="flex-1 py-2.5 rounded-xl bg-basil-600 hover:bg-basil-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5 transition"
               >
                 <Receipt size={16} />
                 Generate Bill
               </button>
               <button
                 onClick={() => setClearTable(t.number)}
-                className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-600 transition"
+                className="px-3 py-2.5 rounded-xl bg-ink-100 hover:bg-paprika-100 text-ink-600 hover:text-paprika-600 transition"
                 title="Clear table"
               >
                 <X size={16} />
@@ -240,38 +240,39 @@ function BillReceipt({
   };
   return (
     <div>
-      <div id="printable-receipt" className="bg-white border border-dashed border-slate-300 rounded-xl p-4 font-mono text-sm">
+      <div id="printable-receipt" className="bg-white border border-parchment-300 rounded-t-xl shadow-ticket p-4 font-mono text-sm relative">
         <div className="text-center mb-3">
-          <p className="font-bold text-base">{restaurantName}</p>
-          <p className="text-xs text-slate-500">Table {table.number}</p>
-          <p className="text-xs text-slate-500">{new Date().toLocaleString()}</p>
+          <p className="font-bold font-display text-base">{restaurantName}</p>
+          <p className="text-xs text-ink-500">Table {table.number}</p>
+          <p className="text-xs text-ink-500">{new Date().toLocaleString()}</p>
         </div>
-        <div className="border-t border-dashed border-slate-300 my-2" />
+        <div className="border-t border-dashed border-ink-300 my-2" />
         {allItems.map((item, i) => (
           <div key={i} className="flex justify-between py-0.5">
             <span>{item.quantity}× {item.name}</span>
             <span>{formatMoney(item.price * item.quantity, currency)}</span>
           </div>
         ))}
-        <div className="border-t border-dashed border-slate-300 my-2" />
-        <div className="flex justify-between py-0.5 text-slate-600">
+        <div className="border-t border-dashed border-ink-300 my-2" />
+        <div className="flex justify-between py-0.5 text-ink-600">
           <span>Subtotal</span>
           <span>{formatMoney(table.subtotal, currency)}</span>
         </div>
-        <div className="flex justify-between py-0.5 text-slate-600">
+        <div className="flex justify-between py-0.5 text-ink-600">
           <span>Tax ({taxRate}%)</span>
           <span>{formatMoney(table.tax, currency)}</span>
         </div>
-        <div className="border-t border-dashed border-slate-300 my-2" />
-        <div className="flex justify-between font-bold text-base">
+        <div className="border-t border-dashed border-ink-300 my-2" />
+        <div className="flex justify-between font-bold text-base text-paprika-600">
           <span>TOTAL</span>
           <span>{formatMoney(table.total, currency)}</span>
         </div>
-        <p className="text-center text-xs text-slate-400 mt-3">Thank you for dining with us!</p>
+        <p className="text-center text-xs text-ink-400 mt-3">Thank you for dining with us!</p>
       </div>
+      <div className="ticket-edge text-parchment-100 bg-white h-2.5 -mt-px rounded-b-xl" />
       <button
         onClick={print}
-        className="w-full mt-4 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 transition"
+        className="w-full mt-4 py-3.5 rounded-xl bg-basil-500 hover:bg-basil-600 text-white font-bold flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg"
       >
         <Printer size={18} />
         Generate Bill & Print Receipt
