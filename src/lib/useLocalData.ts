@@ -87,7 +87,7 @@ export function useOrders() {
     return () => { cancelled = true; };
   }, [updateState]);
 
-  // Subscribe to realtime changes — single source of truth for cross-device sync
+  // Subscribe to realtime changes — primary source of cross-device sync
   useEffect(() => {
     const unsub = subscribeToOrderEvents((event) => {
       const current = currentRef.current;
@@ -102,6 +102,27 @@ export function useOrders() {
       }
     });
     return unsub;
+  }, [updateState]);
+
+  // Safety-net polling: re-fetches every few seconds so orders still show up
+  // promptly even if realtime hiccups for any reason (e.g. a dropped
+  // websocket, or a Supabase project setting) — without this, a missed
+  // realtime event would otherwise require a manual page refresh to notice.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const data = await fetchOrders();
+        const current = currentRef.current;
+        const changed =
+          data.length !== current.length ||
+          data.some((o, i) => o.id !== current[i]?.id || o.status !== current[i]?.status ||
+            JSON.stringify(o.items) !== JSON.stringify(current[i]?.items));
+        if (changed) updateState(data);
+      } catch {
+        // Silently skip this poll — realtime or the next poll will catch up.
+      }
+    }, 8000);
+    return () => clearInterval(interval);
   }, [updateState]);
 
   // Direct async operations — callers use these instead of setOrders diffing
