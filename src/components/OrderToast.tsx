@@ -34,19 +34,19 @@ function OrderToastCard({ toast, onDismiss }: { toast: OrderToast; onDismiss: ()
   }, [onDismiss]);
 
   return (
-    <div className="bg-slate-900 text-white rounded-2xl shadow-lg border border-slate-700 p-4 flex items-start gap-3 animate-[slideIn_0.2s_ease-out]">
-      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+    <div className="bg-ink-900 text-white rounded-2xl shadow-ticket-lg border border-ink-700 p-4 flex items-start gap-3 animate-toast-in ticket-edge">
+      <div className="w-10 h-10 rounded-xl bg-paprika-500/20 text-paprika-400 flex items-center justify-center shrink-0">
         <Bell size={20} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm">New Order — Table {toast.tableNumber}</p>
-        <p className="text-slate-400 text-xs mt-0.5">
+        <p className="text-ink-400 text-xs mt-0.5">
           {toast.itemCount} item{toast.itemCount !== 1 ? 's' : ''} just placed
         </p>
       </div>
       <button
         onClick={onDismiss}
-        className="text-slate-400 hover:text-white shrink-0 -mt-1 -mr-1 p-1"
+        className="text-ink-400 hover:text-white shrink-0 -mt-1 -mr-1 p-1"
         aria-label="Dismiss"
       >
         <X size={16} />
