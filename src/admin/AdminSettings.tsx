@@ -4,11 +4,27 @@ import { useSettings } from '@/lib/useLocalData';
 import { clearAllData } from '@/lib/storage';
 import { ConfirmDialog } from '@/components/ui';
 
+const CURRENCY_OPTIONS = [
+  { label: 'Indian Rupee', symbol: '₹' },
+  { label: 'US Dollar', symbol: '$' },
+  { label: 'Euro', symbol: '€' },
+  { label: 'British Pound', symbol: '£' },
+  { label: 'Japanese Yen', symbol: '¥' },
+  { label: 'UAE Dirham', symbol: 'AED' },
+  { label: 'Saudi Riyal', symbol: 'SAR' },
+  { label: 'Australian Dollar', symbol: 'A$' },
+  { label: 'Canadian Dollar', symbol: 'C$' },
+  { label: 'Singapore Dollar', symbol: 'S$' },
+];
+
 export default function AdminSettings() {
   const { settings, setSettings } = useSettings();
   const [form, setForm] = useState(settings);
   const [saved, setSaved] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [customCurrency, setCustomCurrency] = useState(
+    !CURRENCY_OPTIONS.some((c) => c.symbol === settings.currency)
+  );
 
   const save = () => {
     setSettings(form);
@@ -49,13 +65,44 @@ export default function AdminSettings() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Currency Symbol</label>
-            <input
-              value={form.currency}
-              onChange={(e) => setForm({ ...form, currency: e.target.value })}
-              maxLength={3}
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Currency</label>
+            {!customCurrency ? (
+              <select
+                value={CURRENCY_OPTIONS.some((c) => c.symbol === form.currency) ? form.currency : '__custom__'}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setCustomCurrency(true);
+                    return;
+                  }
+                  setForm({ ...form, currency: e.target.value });
+                }}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+              >
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c.symbol} value={c.symbol}>
+                    {c.symbol} — {c.label}
+                  </option>
+                ))}
+                <option value="__custom__">Other (type your own)</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  value={form.currency}
+                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                  maxLength={5}
+                  placeholder="e.g. Rs, kr, ₦"
+                  className="flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCustomCurrency(false)}
+                  className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 whitespace-nowrap"
+                >
+                  Choose from list
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
