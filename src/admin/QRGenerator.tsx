@@ -162,54 +162,54 @@ export default function QRGenerator() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-slate-900">QR Code Generator</h2>
+      <h2 className="text-xl font-bold text-ink-900">QR Code Generator</h2>
 
       {/* URL config */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+      <div className="bg-white rounded-2xl border border-ink-200 p-4">
         {/* Auto-detected URL badge */}
         <div className="flex items-center gap-2 mb-1">
-          <Globe size={18} className="text-emerald-600" />
-          <h3 className="font-semibold text-slate-900">Site URL (auto-detected)</h3>
+          <Globe size={18} className="text-basil-600" />
+          <h3 className="font-semibold text-ink-900">Site URL (auto-detected)</h3>
         </div>
         <div className="flex items-center gap-2 mb-4">
-          <span className="flex-1 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 font-mono truncate">
+          <span className="flex-1 px-3 py-2 rounded-lg bg-basil-50 border border-basil-200 text-sm text-basil-800 font-mono truncate">
             {autoOrigin}
           </span>
           {isUsingOverride && (
             <button
               onClick={clearOverride}
-              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
+              className="px-3 py-2 rounded-lg bg-basil-600 text-white text-sm font-semibold hover:bg-basil-700 transition"
             >
               Use This
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-ink-400 mb-4">
           {isUsingOverride
             ? 'You have a custom LAN override active (see below). Click "Use This" to switch back to the auto-detected URL.'
             : 'QR codes are using this URL automatically — perfect for your Vercel deployment.'}
         </p>
 
         {/* LAN override */}
-        <div className="border-t border-slate-100 pt-4">
+        <div className="border-t border-ink-100 pt-4">
           <div className="flex items-center gap-2 mb-2">
-            <Wifi size={16} className="text-slate-500" />
-            <h4 className="text-sm font-semibold text-slate-700">Local Wi-Fi Override (optional)</h4>
+            <Wifi size={16} className="text-ink-500" />
+            <h4 className="text-sm font-semibold text-ink-700">Local Wi-Fi Override (optional)</h4>
           </div>
-          <p className="text-xs text-slate-400 mb-3">
-            Only fill this in if customers order over a local Wi-Fi network instead of the internet. Run <code className="bg-slate-100 px-1.5 py-0.5 rounded">ipconfig</code> (Windows) or <code className="bg-slate-100 px-1.5 py-0.5 rounded">ifconfig</code> (Mac/Linux) to find your LAN IP, e.g. <code className="bg-slate-100 px-1.5 py-0.5 rounded">http://192.168.1.10:5173</code>.
+          <p className="text-xs text-ink-400 mb-3">
+            Only fill this in if customers order over a local Wi-Fi network instead of the internet. Run <code className="bg-ink-100 px-1.5 py-0.5 rounded">ipconfig</code> (Windows) or <code className="bg-ink-100 px-1.5 py-0.5 rounded">ifconfig</code> (Mac/Linux) to find your LAN IP, e.g. <code className="bg-ink-100 px-1.5 py-0.5 rounded">http://192.168.1.10:5173</code>.
           </p>
           <div className="flex gap-2">
             <input
               value={isUsingOverride ? lanUrl : ''}
               onChange={(e) => setLanUrl(e.target.value || autoOrigin)}
               placeholder="http://192.168.1.10:5173"
-              className="flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              className="flex-1 px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
             />
             <button
               onClick={saveLanUrl}
               disabled={!isUsingOverride && lanUrl === autoOrigin}
-              className="px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition flex items-center gap-1.5 disabled:opacity-40"
+              className="px-4 py-2.5 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 transition flex items-center gap-1.5 disabled:opacity-40"
             >
               <RefreshCw size={15} />
               Save
@@ -219,10 +219,10 @@ export default function QRGenerator() {
       </div>
 
       {/* Table selector */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+      <div className="bg-white rounded-2xl border border-ink-200 p-4">
         <div className="flex items-center gap-2 mb-3">
-          <QrCode size={18} className="text-slate-700" />
-          <h3 className="font-semibold text-slate-900">Select Table</h3>
+          <QrCode size={18} className="text-ink-700" />
+          <h3 className="font-semibold text-ink-900">Select Table</h3>
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
           {tables.map((t) => (
@@ -231,8 +231,8 @@ export default function QRGenerator() {
               onClick={() => setSelectedTable(t)}
               className={`py-3 rounded-xl font-bold text-sm transition ${
                 selectedTable === t
-                  ? 'bg-slate-900 text-white shadow-lg scale-105'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  ? 'bg-ink-900 text-white shadow-lg scale-105'
+                  : 'bg-ink-100 text-ink-700 hover:bg-ink-200'
               }`}
             >
               {t}
@@ -242,13 +242,13 @@ export default function QRGenerator() {
       </div>
 
       {/* QR preview */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-slate-700 p-6 flex flex-col items-center shadow-xl">
+      <div className="bg-gradient-to-br from-ink-900 to-ink-800 rounded-2xl border border-ink-700 p-6 flex flex-col items-center shadow-xl">
         <div className="text-center mb-4">
           <h3 className="font-bold text-white text-lg">Table {selectedTable}</h3>
-          <p className="text-sm text-slate-400">Scan to view menu &amp; order</p>
+          <p className="text-sm text-ink-400">Scan to view menu &amp; order</p>
         </div>
         <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-2xl blur-md opacity-60 group-hover:opacity-100 transition duration-500" />
+          <div className="absolute -inset-1 bg-gradient-to-r from-basil-400 to-cyan-400 rounded-2xl blur-md opacity-60 group-hover:opacity-100 transition duration-500" />
           {qrDataUrl ? (
             <img
               src={qrDataUrl}
@@ -256,12 +256,12 @@ export default function QRGenerator() {
               className="relative w-64 h-64 rounded-2xl border-2 border-white/20 transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="relative w-64 h-64 rounded-2xl bg-slate-700 flex items-center justify-center text-slate-400 text-sm text-center px-4">
+            <div className="relative w-64 h-64 rounded-2xl bg-ink-700 flex items-center justify-center text-ink-400 text-sm text-center px-4">
               Generating QR code...
             </div>
           )}
         </div>
-        <p className="text-xs text-slate-500 mt-4 break-all max-w-xs text-center font-mono">{customerUrl}</p>
+        <p className="text-xs text-ink-500 mt-4 break-all max-w-xs text-center font-mono">{customerUrl}</p>
         <div className="flex gap-3 mt-5">
           <button
             onClick={downloadQR}
@@ -274,7 +274,7 @@ export default function QRGenerator() {
           <button
             onClick={printQR}
             disabled={!qrDataUrl}
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition flex items-center gap-2 disabled:opacity-40"
+            className="px-5 py-2.5 rounded-xl bg-basil-600 text-white text-sm font-semibold hover:bg-basil-500 transition flex items-center gap-2 disabled:opacity-40"
           >
             <Printer size={16} />
             Print QR
