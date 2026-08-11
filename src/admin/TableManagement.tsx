@@ -3,6 +3,7 @@ import { Table2, Users, Clock, Wallet, Printer, X, CheckCircle2, Download, Recei
 import type { Order, SalesLog } from '@/types';
 import { useOrders, useSettings } from '@/lib/useLocalData';
 import { addSale } from '@/lib/storage';
+import { broadcastFullSync } from '@/lib/sync';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
 
@@ -62,6 +63,7 @@ export default function TableManagement() {
       paidAt: Date.now(),
     };
     addSale(log);
+    broadcastFullSync();
     setBillTable(null);
   };
 
