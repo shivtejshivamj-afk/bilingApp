@@ -233,6 +233,11 @@ export function useSales() {
   const [sales, setSalesState] = useState<SalesLog[]>(() => storage.getSales());
 
   const refresh = useCallback(() => setSalesState(storage.getSales()), []);
+
+  useEffect(() => {
+    return subscribeToFullSync(() => setSalesState(storage.getSales()));
+  }, []);
+
   return { sales, refresh };
 }
 
