@@ -7,7 +7,6 @@ import {
   insertOrder,
   updateOrder,
   deleteOrdersByTable,
-  deleteOrderById,
   subscribeToOrderEvents,
   fetchSettings,
   saveSettingsRemote,
@@ -142,12 +141,7 @@ export function useOrders() {
     await deleteOrdersByTable(tableNumber);
   }, [updateState]);
 
-  const removeOrder = useCallback(async (orderId: string): Promise<void> => {
-    updateState(currentRef.current.filter((o) => o.id !== orderId));
-    await deleteOrderById(orderId);
-  }, [updateState]);
-
-  return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable, removeOrder };
+  return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable };
 }
 
 // Sound preference is intentionally per-device (not synced through Supabase
