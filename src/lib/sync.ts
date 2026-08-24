@@ -63,6 +63,14 @@ export async function deleteOrdersByTable(tableNumber: number): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteOrderById(orderId: string): Promise<void> {
+  const { error } = await supabase
+    .from('orders')
+    .delete()
+    .eq('id', orderId);
+  if (error) throw error;
+}
+
 // ---------------------------------------------------------------------------
 // Settings — shared across every device (admin, kitchen, customer QR menu).
 // ---------------------------------------------------------------------------
