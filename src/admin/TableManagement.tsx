@@ -47,11 +47,8 @@ export default function TableManagement() {
 
   const billOrder = tables.find((t) => t.number === billTable);
 
-  const generateBill = () => {
+  const generateBill = async () => {
     if (!billOrder) return;
-    billOrder.orders.forEach((o) => {
-      patchOrder({ ...o, status: 'Billed' as const }).catch((e) => console.error('patchOrder failed:', e));
-    });
 
     const log: SalesLog = {
       id: `sale_${Date.now()}`,
@@ -62,7 +59,17 @@ export default function TableManagement() {
       total: billOrder.total,
       paidAt: Date.now(),
     };
+    // Save the permanent sales record first (this is what Reports reads from
+    // — it keeps the full historical revenue data forever), THEN remove the
+    // now-settled orders from the live orders table. Without this cleanup
+    // step, billed orders would sit in the database indefinitely, growing
+    // without bound and cluttering the "All" orders view.
     addSale(log);
+    try {
+      await removeOrdersByTable(billOrder.number);
+    } catch (e) {
+      console.error('Failed to clear billed orders from table:', e);
+    }
     broadcastFullSync();
     setBillTable(null);
   };
