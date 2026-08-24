@@ -23,7 +23,7 @@ const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
 const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed'];
 
 export default function OrderManagement() {
-  const { orders, patchOrder } = useOrders();
+  const { orders, patchOrder, removeOrder } = useOrders();
   const { settings } = useSettings();
   const { soundEnabled, setSoundEnabled } = useSoundPreference();
   const [filter, setFilter] = useState<'active' | 'all'>('active');
@@ -123,7 +123,9 @@ export default function OrderManagement() {
     if (!removed) return;
     const items = order.items.filter((_, i) => i !== itemIdx);
     if (items.length === 0) {
-      patchOrder({ ...order, items, status: 'Billed', total: 0, subtotal: 0, tax: 0 });
+      // No items left on this order — remove it entirely instead of
+      // leaving an empty, zeroed-out row sitting in the database.
+      removeOrder(orderId).catch((e) => console.error('Failed to remove empty order:', e));
       return;
     }
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -132,9 +134,10 @@ export default function OrderManagement() {
   };
 
   const cancelOrder = (orderId: string) => {
-    const order = orders.find((o) => o.id === orderId);
-    if (!order) return;
-    patchOrder({ ...order, status: 'Billed', items: [], total: 0, subtotal: 0, tax: 0 });
+    // Cancelling now removes the order entirely rather than zeroing it out
+    // and leaving an empty row behind — that empty row would otherwise sit
+    // in the database forever, the same clutter problem as unbilled orders.
+    removeOrder(orderId).catch((e) => console.error('Failed to cancel order:', e));
   };
 
   const visibleOrders = useMemo(() => {
