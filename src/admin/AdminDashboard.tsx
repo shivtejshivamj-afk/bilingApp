@@ -12,7 +12,9 @@ import {
   Bell,
   TrendingUp,
 } from 'lucide-react';
-import { useOrders, useSettings } from '@/lib/useLocalData';
+import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
+import { playNewOrderChime } from '@/lib/audio';
+import { OrderToastStack, ensureNotificationPermission, showOsNotification, type OrderToast } from '@/components/OrderToast';
 import OrderManagement from './OrderManagement';
 import TableManagement from './TableManagement';
 import MenuManager from './MenuManager';
@@ -35,12 +37,74 @@ const TABS: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
 export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { settings } = useSettings();
   const { orders } = useOrders();
+  const { soundEnabled } = useSoundPreference();
   const [tab, setTab] = useState<Tab>('orders');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newFlash, setNewFlash] = useState(false);
   const prevNewCount = useRef(0);
+  const [toasts, setToasts] = useState<OrderToast[]>([]);
+  const audioReady = useRef(false);
 
   const newCount = useMemo(() => orders.filter((o) => o.status === 'New').length, [orders]);
+
+  // This lives here — at the top of the whole admin shell, which stays
+  // mounted no matter which tab (Orders, Tables, Menu, etc.) staff are
+  // looking at — rather than inside the Orders tab itself. That way, a
+  // customer placing an order through the QR menu triggers the sound/toast
+  // even if staff currently have Tables or Menu open, not just Orders.
+
+  // Orders created before this component mounted are "old" — only alert for
+  // orders whose createdAt is after this timestamp, and only once per id.
+  const mountedAt = useRef(Date.now());
+  const alertedIds = useRef<Set<string>>(new Set());
+
+  const dismissToast = (id: string) => {
+    setToasts((current) => current.filter((t) => t.id !== id));
+  };
+
+  // Ask for OS notification permission once, so alerts still show even if
+  // this browser tab isn't focused at all.
+  useEffect(() => {
+    ensureNotificationPermission();
+  }, []);
+
+  // Unlock audio playback on the very first interaction anywhere in the
+  // admin app (clicking a nav tab, tapping a button, etc.) — browsers block
+  // audio until a real user gesture happens, so this only needs to fire once
+  // per session, no matter which screen that first click happens on.
+  useEffect(() => {
+    const unlock = () => {
+      audioReady.current = true;
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  // Alert (sound + toast + OS notification) for any genuinely new order,
+  // regardless of which admin tab is currently open.
+  useEffect(() => {
+    const freshOrders = orders.filter(
+      (o) => o.createdAt > mountedAt.current && !alertedIds.current.has(o.id)
+    );
+    if (freshOrders.length === 0) return;
+
+    freshOrders.forEach((o) => alertedIds.current.add(o.id));
+
+    if (audioReady.current && soundEnabled) {
+      playNewOrderChime();
+    }
+    setToasts((current) => [
+      ...freshOrders.map((o) => ({ id: o.id, tableNumber: o.tableNumber, itemCount: o.items.length })),
+      ...current,
+    ]);
+    freshOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
+  }, [orders, soundEnabled]);
 
   // Flash banner when a new order arrives (count increases)
   useEffect(() => {
@@ -65,6 +129,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="min-h-screen bg-parchment-100 flex">
+      <OrderToastStack toasts={toasts} onDismiss={dismissToast} />
       {/* Sidebar — desktop */}
       <aside className="hidden md:flex w-60 bg-ink-900 flex-col fixed inset-y-0 left-0 z-30">
         <SidebarContent
