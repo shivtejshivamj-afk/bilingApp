@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Bell,
   ChefHat,
@@ -16,7 +16,6 @@ import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
 import { playNewOrderChime, playStatusChime } from '@/lib/audio';
 import { formatMoney, formatTime, timeAgo } from '@/lib/billing';
 import { StatusBadge } from '@/components/ui';
-import { OrderToastStack, ensureNotificationPermission, showOsNotification, type OrderToast } from '@/components/OrderToast';
 import ManualOrderModal from './ManualOrderModal';
 
 const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
@@ -25,68 +24,16 @@ const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed']
 export default function OrderManagement() {
   const { orders, patchOrder, removeOrder } = useOrders();
   const { settings } = useSettings();
+  // Sound preference and the new-order alert (chime/toast/OS notification)
+  // itself now live one level up in AdminDashboard, since that component
+  // stays mounted across every tab — this page only needs the on/off toggle
+  // control here, not its own separate copy of the alert logic (which would
+  // otherwise double-fire while this tab happens to be open).
   const { soundEnabled, setSoundEnabled } = useSoundPreference();
   const [filter, setFilter] = useState<'active' | 'all'>('active');
   const [manualOpen, setManualOpen] = useState(false);
-  const [toasts, setToasts] = useState<OrderToast[]>([]);
-  const audioReady = useRef(false);
-  // Orders created before this component mounted are "old" — we only ever
-  // alert for orders whose createdAt is after this timestamp. This avoids
-  // any race with the initial load (which can update state more than once
-  // as the fetch and the realtime subscription both resolve) incorrectly
-  // treating existing orders as new.
-  const mountedAt = useRef(Date.now());
-  // Guards against alerting twice for the same order, in case a realtime
-  // event or a state update happens to fire more than once for it.
-  const alertedIds = useRef<Set<string>>(new Set());
-
-  const dismissToast = (id: string) => {
-    setToasts((current) => current.filter((t) => t.id !== id));
-  };
-
-  // Ask for OS notification permission once, so alerts still show if this
-  // tab isn't focused (e.g. staff on a different app/screen).
-  useEffect(() => {
-    ensureNotificationPermission();
-  }, []);
-
-  // Unlock audio on first user interaction with the page
-  useEffect(() => {
-    const unlock = () => {
-      audioReady.current = true;
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-    };
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
-    return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-    };
-  }, []);
-
-  // Alert (sound + toast + OS notification) only for orders placed after
-  // this component mounted, and only once per order id.
-  useEffect(() => {
-    const freshOrders = orders.filter(
-      (o) => o.createdAt > mountedAt.current && !alertedIds.current.has(o.id)
-    );
-    if (freshOrders.length === 0) return;
-
-    freshOrders.forEach((o) => alertedIds.current.add(o.id));
-
-    if (audioReady.current && soundEnabled) {
-      playNewOrderChime();
-    }
-    setToasts((current) => [
-      ...freshOrders.map((o) => ({ id: o.id, tableNumber: o.tableNumber, itemCount: o.items.length })),
-      ...current,
-    ]);
-    freshOrders.forEach((o) => showOsNotification(o.tableNumber, o.items.length));
-  }, [orders, soundEnabled]);
 
   const toggleSound = () => {
-    audioReady.current = true;
     setSoundEnabled(!soundEnabled);
     if (!soundEnabled) playNewOrderChime();
   };
@@ -150,7 +97,6 @@ export default function OrderManagement() {
 
   return (
     <div className="space-y-4">
-      <OrderToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold font-display text-ink-900">Live Orders</h2>
