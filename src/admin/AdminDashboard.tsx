@@ -53,9 +53,15 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   // customer placing an order through the QR menu triggers the sound/toast
   // even if staff currently have Tables or Menu open, not just Orders.
 
-  // Orders created before this component mounted are "old" — only alert for
-  // orders whose createdAt is after this timestamp, and only once per id.
-  const mountedAt = useRef(Date.now());
+  // Which orders we've already alerted for. Deliberately NOT based on
+  // comparing timestamps (an order's createdAt comes from the CUSTOMER's
+  // phone, while "when did this page load" comes from the ADMIN's device —
+  // if those two clocks are out of sync, as phones/laptops often are, a
+  // timestamp comparison can silently and permanently misclassify brand new
+  // orders as "old"). Instead: the first time orders load, we snapshot
+  // whatever IDs already exist and never alert for those. Anything with an
+  // id we haven't seen before, after that snapshot, is genuinely new.
+  const knownIds = useRef<Set<string> | null>(null);
   const alertedIds = useRef<Set<string>>(new Set());
 
   const dismissToast = (id: string) => {
@@ -89,12 +95,22 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   // Alert (sound + toast + OS notification) for any genuinely new order,
   // regardless of which admin tab is currently open.
   useEffect(() => {
+    // First time orders load at all: just record what's already there.
+    // Nothing to alert for yet — these are pre-existing orders, not new ones.
+    if (knownIds.current === null) {
+      knownIds.current = new Set(orders.map((o) => o.id));
+      return;
+    }
+
     const freshOrders = orders.filter(
-      (o) => o.createdAt > mountedAt.current && !alertedIds.current.has(o.id)
+      (o) => !knownIds.current!.has(o.id) && !alertedIds.current.has(o.id)
     );
     if (freshOrders.length === 0) return;
 
-    freshOrders.forEach((o) => alertedIds.current.add(o.id));
+    freshOrders.forEach((o) => {
+      knownIds.current!.add(o.id);
+      alertedIds.current.add(o.id);
+    });
 
     if (audioReady.current && soundEnabled) {
       playNewOrderChime();
