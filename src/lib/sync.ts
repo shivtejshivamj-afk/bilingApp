@@ -138,7 +138,7 @@ export function subscribeToSettingsEvents(onChange: (settings: Settings) => void
 export type OrderEvent =
   | { type: 'INSERT'; order: Order }
   | { type: 'UPDATE'; order: Order }
-  | { type: 'DELETE'; tableNumber: number };
+  | { type: 'DELETE'; orderId: string };
 
 export function subscribeToOrderEvents(onEvent: (e: OrderEvent) => void): () => void {
   const channel = supabase
@@ -150,7 +150,13 @@ export function subscribeToOrderEvents(onEvent: (e: OrderEvent) => void): () => 
       onEvent({ type: 'UPDATE', order: rowToOrder(payload.new) });
     })
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'orders' }, (payload) => {
-      onEvent({ type: 'DELETE', tableNumber: (payload.old as any).table_number });
+      // Postgres only guarantees the primary key ("id") is present in the
+      // old-row data for DELETE events by default — table_number and other
+      // columns are NOT reliably included unless REPLICA IDENTITY FULL is
+      // set. Filtering by id (always present) instead of table_number (which
+      // could be undefined) is what actually works across every device.
+      const deletedId = (payload.old as any).id;
+      if (deletedId) onEvent({ type: 'DELETE', orderId: deletedId });
     })
     .subscribe();
 
