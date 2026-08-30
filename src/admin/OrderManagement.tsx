@@ -99,9 +99,19 @@ export default function OrderManagement() {
   };
 
   const visibleOrders = useMemo(() => {
-    const sorted = [...orders].sort((a, b) => b.createdAt - a.createdAt);
+    // Oldest first — a kitchen queue should be worked through in the order
+    // things arrived, so nothing quietly gets left behind. Newest-first
+    // (like a chat feed) actually hides how long the oldest order has been
+    // waiting, buried at the bottom.
+    const sorted = [...orders].sort((a, b) => a.createdAt - b.createdAt);
     if (filter === 'all') return sorted;
-    return sorted.filter((o) => o.status !== 'Billed');
+    // "Needs Attention": still has at least one item that isn't Served yet,
+    // or hasn't even been acknowledged. Once every item on an order is
+    // Served, it drops out of this view — it's just waiting to be billed,
+    // not waiting on the kitchen — but it still shows up under "All".
+    return sorted.filter(
+      (o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served')
+    );
   }, [orders, filter]);
 
   const newCount = orders.filter((o) => o.status === 'New').length;
@@ -150,13 +160,13 @@ export default function OrderManagement() {
               onClick={() => setFilter('active')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'active' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
             >
-              Active
+              Needs Attention
             </button>
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'all' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
             >
-              All
+              All Tables
             </button>
           </div>
           <button
@@ -178,10 +188,11 @@ export default function OrderManagement() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visibleOrders.map((order) => (
+        {visibleOrders.map((order, idx) => (
           <OrderCard
             key={order.id}
             order={order}
+            position={idx + 1}
             currency={settings.currency}
             isNew={order.status === 'New'}
             onAcknowledge={() => acknowledge(order.id)}
@@ -199,6 +210,7 @@ export default function OrderManagement() {
 
 function OrderCard({
   order,
+  position,
   currency,
   isNew,
   onAcknowledge,
@@ -207,6 +219,7 @@ function OrderCard({
   onCancelOrder,
 }: {
   order: Order;
+  position: number;
   currency: string;
   isNew: boolean;
   onAcknowledge: () => void;
@@ -222,7 +235,10 @@ function OrderCard({
             T{order.tableNumber}
           </div>
           <div>
-            <p className="font-bold text-ink-900 text-sm">Table {order.tableNumber}</p>
+            <p className="font-bold text-ink-900 text-sm flex items-center gap-1.5">
+              Table {order.tableNumber}
+              <span className="text-ink-400 font-normal text-xs font-mono">#{position}</span>
+            </p>
             <p className="text-xs text-ink-500 font-mono">{timeAgo(order.createdAt)} · {formatTime(order.createdAt)}</p>
           </div>
         </div>
