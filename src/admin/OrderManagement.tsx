@@ -15,7 +15,7 @@ import type { Order, OrderItem, OrderItemStatus } from '@/types';
 import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
 import { playNewOrderChime, playStatusChime } from '@/lib/audio';
 import { formatMoney, formatTime, timeAgo } from '@/lib/billing';
-import { StatusBadge } from '@/components/ui';
+import { StatusBadge, ConfirmDialog } from '@/components/ui';
 import ManualOrderModal from './ManualOrderModal';
 
 const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
@@ -32,6 +32,8 @@ export default function OrderManagement() {
   const { soundEnabled, setSoundEnabled } = useSoundPreference();
   const [filter, setFilter] = useState<'active' | 'all'>('active');
   const [manualOpen, setManualOpen] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const toggleSound = () => {
     setSoundEnabled(!soundEnabled);
@@ -84,7 +86,16 @@ export default function OrderManagement() {
     // Cancelling now removes the order entirely rather than zeroing it out
     // and leaving an empty row behind — that empty row would otherwise sit
     // in the database forever, the same clutter problem as unbilled orders.
-    removeOrder(orderId).catch((e) => console.error('Failed to cancel order:', e));
+    setCancelError(null);
+    removeOrder(orderId).catch((e) => {
+      console.error('Failed to cancel order:', e);
+      // Surface the failure instead of silently letting the order reappear
+      // a few seconds later once the background refresh notices it's still
+      // in the database — that silent revert is confusing and looks like
+      // "the button doesn't work" when really the delete itself failed
+      // (e.g. a permissions issue or a dropped connection).
+      setCancelError(e?.message || 'Something went wrong cancelling this order. Please try again.');
+    });
   };
 
   const visibleOrders = useMemo(() => {
@@ -97,6 +108,26 @@ export default function OrderManagement() {
 
   return (
     <div className="space-y-4">
+      {cancelError && (
+        <div className="px-4 py-3 rounded-xl bg-paprika-50 border border-paprika-200 text-paprika-700 text-sm flex items-center justify-between">
+          <span>{cancelError}</span>
+          <button onClick={() => setCancelError(null)} className="text-paprika-500 hover:text-paprika-700 font-bold px-2">
+            ×
+          </button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        title="Cancel this order?"
+        message="This will permanently remove the order. This can't be undone."
+        confirmLabel="Cancel Order"
+        danger
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={() => {
+          if (cancelTarget) cancelOrder(cancelTarget);
+          setCancelTarget(null);
+        }}
+      />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold font-display text-ink-900">Live Orders</h2>
@@ -156,7 +187,7 @@ export default function OrderManagement() {
             onAcknowledge={() => acknowledge(order.id)}
             onAdvanceItem={(idx) => advanceItem(order.id, idx)}
             onRemoveItem={(idx) => removeItem(order.id, idx)}
-            onCancelOrder={() => cancelOrder(order.id)}
+            onCancelOrder={() => setCancelTarget(order.id)}
           />
         ))}
       </div>
