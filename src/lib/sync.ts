@@ -120,7 +120,7 @@ export async function saveSettingsRemote(settings: Settings): Promise<void> {
 
 export function subscribeToSettingsEvents(onChange: (settings: Settings) => void): () => void {
   const channel = supabase
-    .channel('settings-realtime')
+    .channel(`settings-realtime-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (payload) => {
       if (payload.new) onChange(rowToSettings(payload.new));
     })
@@ -142,7 +142,7 @@ export type OrderEvent =
 
 export function subscribeToOrderEvents(onEvent: (e: OrderEvent) => void): () => void {
   const channel = supabase
-    .channel('orders-realtime')
+    .channel(`orders-realtime-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
       onEvent({ type: 'INSERT', order: rowToOrder(payload.new) });
     })
