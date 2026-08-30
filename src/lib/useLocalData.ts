@@ -7,6 +7,7 @@ import {
   insertOrder,
   updateOrder,
   deleteOrdersByTable,
+  deleteOrderById,
   subscribeToOrderEvents,
   fetchSettings,
   saveSettingsRemote,
@@ -98,7 +99,7 @@ export function useOrders() {
       } else if (event.type === 'UPDATE') {
         updateState(current.map((o) => (o.id === event.order.id ? event.order : o)));
       } else if (event.type === 'DELETE') {
-        updateState(current.filter((o) => o.tableNumber !== event.tableNumber));
+        updateState(current.filter((o) => o.id !== event.orderId));
       }
     });
     return unsub;
@@ -141,7 +142,12 @@ export function useOrders() {
     await deleteOrdersByTable(tableNumber);
   }, [updateState]);
 
-  return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable };
+  const removeOrder = useCallback(async (orderId: string): Promise<void> => {
+    updateState(currentRef.current.filter((o) => o.id !== orderId));
+    await deleteOrderById(orderId);
+  }, [updateState]);
+
+  return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable, removeOrder };
 }
 
 // Sound preference is intentionally per-device (not synced through Supabase
