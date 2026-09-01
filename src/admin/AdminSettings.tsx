@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Save, Trash2, Wallet } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Trash2, Wallet, Link2, Check, AlertCircle } from 'lucide-react';
 import { useSettings, useSales } from '@/lib/useLocalData';
 import { clearRestaurantLocalData } from '@/lib/storage';
-import { resetRestaurantData } from '@/lib/sync';
-import { useRestaurantId } from '@/lib/restaurantContext';
+import { resetRestaurantData, changeRestaurantSlug } from '@/lib/sync';
+import { useRestaurantId, getSlugFromPath, buildRestaurantUrl, slugify } from '@/lib/restaurantContext';
 import { ConfirmDialog } from '@/components/ui';
 
 const CURRENCY_OPTIONS = [
@@ -29,6 +29,30 @@ export default function AdminSettings() {
   const [customCurrency, setCustomCurrency] = useState(
     !CURRENCY_OPTIONS.some((c) => c.symbol === settings.currency)
   );
+
+  const currentSlug = getSlugFromPath() ?? '';
+  const [slugInput, setSlugInput] = useState(currentSlug);
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'saving' | 'saved' | 'taken' | 'error'>('idle');
+
+  const saveSlug = async () => {
+    const next = slugify(slugInput);
+    if (!next || next === currentSlug) return;
+    setSlugStatus('saving');
+    try {
+      const ok = await changeRestaurantSlug(restaurantId, next);
+      if (!ok) {
+        setSlugStatus('taken');
+        return;
+      }
+      setSlugStatus('saved');
+      // The URL itself needs to change to the new slug — redirect there.
+      setTimeout(() => {
+        window.location.href = buildRestaurantUrl(next, { admin: true });
+      }, 900);
+    } catch {
+      setSlugStatus('error');
+    }
+  };
 
   const save = () => {
     setSettings(form);
@@ -153,6 +177,52 @@ export default function AdminSettings() {
           <Save size={16} />
           {saved ? 'Saved!' : 'Save Settings'}
         </button>
+      </div>
+
+      {/* Restaurant URL */}
+      <div className="bg-white rounded-2xl border border-ink-200 p-5">
+        <h3 className="font-semibold text-ink-900 flex items-center gap-2 mb-1">
+          <Link2 size={18} />
+          Your Restaurant URL
+        </h3>
+        <p className="text-xs text-ink-400 mb-3">
+          This is the web address customers and staff use to reach you. Changing it updates every QR code you've printed — you'll need to reprint them.
+        </p>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center rounded-lg border border-ink-200 overflow-hidden focus-within:ring-2 focus-within:ring-ink-900">
+            <span className="pl-3 text-ink-400 text-sm whitespace-nowrap">{window.location.host}/</span>
+            <input
+              value={slugInput}
+              onChange={(e) => {
+                setSlugInput(slugify(e.target.value));
+                setSlugStatus('idle');
+              }}
+              className="flex-1 min-w-0 py-2.5 pr-3 text-sm focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={saveSlug}
+            disabled={slugStatus === 'saving' || !slugInput || slugInput === currentSlug}
+            className="px-4 py-2.5 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {slugStatus === 'saving' ? 'Saving…' : 'Update'}
+          </button>
+        </div>
+        {slugStatus === 'saved' && (
+          <p className="text-basil-600 text-xs mt-2 flex items-center gap-1">
+            <Check size={14} /> Saved — redirecting you to the new address…
+          </p>
+        )}
+        {slugStatus === 'taken' && (
+          <p className="text-paprika-600 text-xs mt-2 flex items-center gap-1">
+            <AlertCircle size={14} /> That address is already taken by another restaurant.
+          </p>
+        )}
+        {slugStatus === 'error' && (
+          <p className="text-paprika-600 text-xs mt-2 flex items-center gap-1">
+            <AlertCircle size={14} /> Something went wrong — please try again.
+          </p>
+        )}
       </div>
 
       {/* Sales summary */}
