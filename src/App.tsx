@@ -206,7 +206,7 @@ function PlatformLanding() {
           <div>
             <label className="block text-sm font-medium text-ink-300 mb-1.5">Your URL</label>
             <div className="flex items-center rounded-lg bg-ink-700 focus-within:ring-2 focus-within:ring-paprika-400 overflow-hidden">
-              <span className="pl-3.5 text-ink-500 text-sm whitespace-nowrap">yourapp.com/</span>
+              <span className="pl-3.5 text-ink-500 text-sm whitespace-nowrap">{window.location.host}/</span>
               <input
                 value={effectiveSlug}
                 onChange={(e) => {
@@ -230,7 +230,7 @@ function PlatformLanding() {
         </form>
 
         <p className="text-center text-ink-500 text-xs mt-6">
-          Already have a restaurant here? Go to <span className="font-mono">yourapp.com/your-restaurant-name</span>
+          Already have a restaurant here? Go to <span className="font-mono">{window.location.host}/your-restaurant-name</span>
         </p>
       </div>
     </div>
