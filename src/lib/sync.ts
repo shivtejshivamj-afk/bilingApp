@@ -86,6 +86,16 @@ export async function saveSettingsRemote(restaurantId: string, settings: Setting
   if (error) throw error;
 }
 
+/** Returns false if the new slug is already taken by another restaurant. */
+export async function changeRestaurantSlug(restaurantId: string, newSlug: string): Promise<boolean> {
+  const { error } = await supabase.from('restaurants').update({ slug: newSlug }).eq('id', restaurantId);
+  if (error) {
+    if ((error as any).code === '23505') return false; // unique_violation
+    throw error;
+  }
+  return true;
+}
+
 export function subscribeToRestaurantEvents(restaurantId: string, onChange: (r: RestaurantRecord) => void): () => void {
   const channel = supabase
     .channel(`restaurant-realtime-${Math.random().toString(36).slice(2)}`)
