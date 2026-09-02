@@ -62,16 +62,29 @@ type ResolveState =
 export function useResolveRestaurant(slug: string) {
   const [state, setState] = useState<ResolveState>({ status: 'loading' });
 
+  // Deliberately does NOT reset status back to 'loading' — doing so would
+  // unmount the whole restaurant tree below it (since 'loading' renders a
+  // completely different subtree), wiping out any local component state
+  // (like "am I logged in?") that lives further down. A silent in-place
+  // update avoids that remount entirely.
   const refresh = useCallback(() => {
+    fetchRestaurantBySlug(slug)
+      .then((r) => {
+        if (r) setState({ status: 'found', restaurant: r });
+        // If the restaurant genuinely disappeared, leave the current state
+        // alone rather than yanking the user to a "not found" screen mid-session.
+      })
+      .catch(() => {
+        // Network hiccup — keep showing what we already have.
+      });
+  }, [slug]);
+
+  useEffect(() => {
     setState({ status: 'loading' });
     fetchRestaurantBySlug(slug)
       .then((r) => setState(r ? { status: 'found', restaurant: r } : { status: 'not-found' }))
       .catch(() => setState({ status: 'not-found' }));
   }, [slug]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   return { ...state, refresh };
 }
