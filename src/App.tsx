@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone } from 'lucide-react';
 import { getSlugFromPath, useResolveRestaurant, RestaurantProvider, signUpRestaurant, slugify } from '@/lib/restaurantContext';
 import { getCurrentUserId, onAuthChange, signOut } from '@/lib/sync';
 import { useSettings } from '@/lib/useLocalData';
@@ -216,18 +216,35 @@ function PlatformLanding() {
     }
   };
 
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
-    <div className="min-h-screen bg-ink-900 text-white flex flex-col items-center justify-center px-6 py-16">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-paprika-500 mb-5">
-            <Utensils className="text-white" size={32} />
+    <div className="min-h-screen bg-ink-900 text-white">
+      <div className="max-w-5xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-14 items-center">
+        {/* Left: compact product showcase */}
+        <div>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-paprika-500 mb-6">
+            <Utensils className="text-white" size={28} />
           </div>
-          <h1 className="text-3xl font-display font-semibold mb-3">Get your restaurant online</h1>
-          <p className="text-ink-400">QR self-ordering and billing — set up in under a minute.</p>
+          <h1 className="text-4xl font-display font-semibold mb-4 leading-tight">
+            QR ordering &amp; billing, for any restaurant
+          </h1>
+          <p className="text-ink-400 text-lg mb-8 max-w-md">
+            Customers scan, browse, and order from their phone. Staff get live orders, one-tap billing, and real-time reports — all in one dashboard.
+          </p>
+          <div className="space-y-4">
+            <Spec icon={Smartphone} title="Self-order by QR" desc="No app download — customers order straight from their phone." />
+            <Spec icon={Bell} title="Instant order alerts" desc="Sound, on-screen, and browser notifications the moment an order comes in." />
+            <Spec icon={BarChart3} title="Live revenue reports" desc="Interactive charts of revenue, top items, and trends — always current." />
+          </div>
         </div>
 
-        <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 border border-ink-700 shadow-ticket-lg space-y-4">
+        {/* Right: signup form */}
+        <div className="w-full max-w-md justify-self-center lg:justify-self-end">
+          <h2 className="text-xl font-display font-semibold mb-1">Create your restaurant</h2>
+          <p className="text-ink-400 text-sm mb-5">Set up in under a minute — free to start.</p>
+
+          <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 border border-ink-700 shadow-ticket-lg space-y-4">
           <div>
             <label className="block text-sm font-medium text-ink-300 mb-1.5">Restaurant name</label>
             <input
@@ -265,13 +282,22 @@ function PlatformLanding() {
           </div>
           <div>
             <label className="block text-sm font-medium text-ink-300 mb-1.5">Choose a password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              className="w-full px-3.5 py-2.5 rounded-lg bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-paprika-400"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                className="w-full px-3.5 py-2.5 pr-11 rounded-lg bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-paprika-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-paprika-300 text-sm">{error}</p>}
           <button
@@ -284,9 +310,24 @@ function PlatformLanding() {
           </button>
         </form>
 
-        <p className="text-center text-ink-500 text-xs mt-6">
-          Already have a restaurant here? Go to <span className="font-mono">{window.location.host}/your-restaurant-name</span>
-        </p>
+          <p className="text-center text-ink-500 text-xs mt-6">
+            Already have a restaurant here? Go to <span className="font-mono">{window.location.host}/your-restaurant-name</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Spec({ icon: Icon, title, desc }: { icon: typeof Utensils; title: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-9 h-9 rounded-xl bg-ink-800 border border-ink-700 flex items-center justify-center shrink-0 mt-0.5">
+        <Icon size={17} className="text-paprika-400" />
+      </div>
+      <div>
+        <p className="font-semibold text-white text-sm">{title}</p>
+        <p className="text-ink-400 text-sm">{desc}</p>
       </div>
     </div>
   );
