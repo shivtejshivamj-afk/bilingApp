@@ -2,6 +2,50 @@ import type { MenuItem, Order, Settings } from '@/types';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
+// Authentication — each restaurant admin gets a real account. See the
+// 20260901000000_restaurant_auth.sql migration for the security model this
+// backs (ownership-based RLS instead of a shared PIN with an open API key).
+// ---------------------------------------------------------------------------
+
+export async function signUp(email: string, password: string): Promise<{ userId: string } | { error: string }> {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return { error: error.message };
+  if (!data.user) return { error: 'Account creation did not return a user. Please try again.' };
+  return { userId: data.user.id };
+}
+
+export async function signIn(email: string, password: string): Promise<{ userId: string } | { error: string }> {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: error.message };
+  if (!data.user) return { error: 'Sign in did not return a user. Please try again.' };
+  return { userId: data.user.id };
+}
+
+export async function signOut(): Promise<void> {
+  await supabase.auth.signOut();
+}
+
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
+export function onAuthChange(callback: (userId: string | null) => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user.id ?? null);
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+/** Attaches the currently signed-in user as this restaurant's owner. Only
+ * works if the restaurant isn't already claimed by someone else (enforced
+ * by RLS, not just this check). */
+export async function claimRestaurant(restaurantId: string, ownerId: string): Promise<boolean> {
+  const { error } = await supabase.from('restaurants').update({ owner_id: ownerId }).eq('id', restaurantId);
+  return !error;
+}
+
+// ---------------------------------------------------------------------------
 // Restaurants — the tenant registry. Every other table is scoped to one of
 // these via restaurant_id.
 // ---------------------------------------------------------------------------
@@ -9,6 +53,7 @@ import { supabase } from './supabase';
 export interface RestaurantRecord {
   id: string;
   slug: string;
+  ownerId: string | null;
   settings: Settings;
 }
 
@@ -16,6 +61,7 @@ function rowToRestaurant(row: any): RestaurantRecord {
   return {
     id: row.id,
     slug: row.slug,
+    ownerId: row.owner_id ?? null,
     settings: {
       restaurantName: row.name,
       masterPin: row.master_pin,
@@ -43,10 +89,10 @@ export async function fetchRestaurantBySlug(slug: string): Promise<RestaurantRec
 }
 
 /** Returns null if the slug is already taken (a friendlier signal than a thrown error). */
-export async function createRestaurant(slug: string, name: string): Promise<RestaurantRecord | null> {
+export async function createRestaurant(slug: string, name: string, ownerId: string): Promise<RestaurantRecord | null> {
   const { data, error } = await supabase
     .from('restaurants')
-    .insert({ slug, name, created_at: Date.now() })
+    .insert({ slug, name, owner_id: ownerId, created_at: Date.now() })
     .select()
     .maybeSingle();
   if (error) {
