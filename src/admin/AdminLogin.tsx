@@ -115,6 +115,7 @@ function UnclaimedLogin({
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showClaimPassword, setShowClaimPassword] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -209,12 +210,19 @@ function UnclaimedLogin({
           <div className="relative">
             <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
             <input
-              type="password"
+              type={showClaimPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 6 characters"
-              className="w-full pl-10 pr-3 py-3 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-paprika-400"
+              className="w-full pl-10 pr-11 py-3 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-paprika-400"
             />
+            <button
+              type="button"
+              onClick={() => setShowClaimPassword(!showClaimPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white transition-colors"
+            >
+              {showClaimPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
         </div>
         {claimError && <p className="text-paprika-300 text-sm">{claimError}</p>}
