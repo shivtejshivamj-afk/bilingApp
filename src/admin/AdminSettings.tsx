@@ -4,6 +4,7 @@ import { useSettings, useSales } from '@/lib/useLocalData';
 import { clearRestaurantLocalData } from '@/lib/storage';
 import { resetRestaurantData, changeRestaurantSlug } from '@/lib/sync';
 import { useRestaurantId, getSlugFromPath, buildRestaurantUrl, slugify } from '@/lib/restaurantContext';
+import { CopyButton } from '@/components/CopyButton';
 import { ConfirmDialog } from '@/components/ui';
 
 const CURRENCY_OPTIONS = [
@@ -207,6 +208,10 @@ export default function AdminSettings() {
           >
             {slugStatus === 'saving' ? 'Saving…' : 'Update'}
           </button>
+          <CopyButton
+            value={buildRestaurantUrl(currentSlug)}
+            className="px-3 py-2.5 rounded-lg border border-ink-200 text-ink-500 hover:text-ink-900 hover:bg-ink-50 text-sm font-medium"
+          />
         </div>
         {slugStatus === 'saved' && (
           <p className="text-basil-600 text-xs mt-2 flex items-center gap-1">
