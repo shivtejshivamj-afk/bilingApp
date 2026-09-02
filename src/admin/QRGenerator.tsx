@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { QrCode, Download, Printer, Globe } from 'lucide-react';
 import { useSettings } from '@/lib/useLocalData';
 import { getSlugFromPath, buildRestaurantUrl } from '@/lib/restaurantContext';
+import { CopyButton } from '@/components/CopyButton';
 
 export default function QRGenerator() {
   const { settings } = useSettings();
@@ -133,9 +134,12 @@ export default function QRGenerator() {
           <Globe size={18} className="text-basil-600" />
           <h3 className="font-semibold text-ink-900">Your restaurant's link</h3>
         </div>
-        <span className="block px-3 py-2 rounded-lg bg-basil-50 border border-basil-200 text-sm text-basil-800 font-mono truncate">
-          {buildRestaurantUrl(slug)}
-        </span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-basil-50 border border-basil-200">
+          <span className="flex-1 min-w-0 text-sm text-basil-800 font-mono truncate">
+            {buildRestaurantUrl(slug)}
+          </span>
+          <CopyButton value={buildRestaurantUrl(slug)} className="text-basil-700 hover:text-basil-900 text-xs font-semibold" />
+        </div>
         <p className="text-xs text-ink-400 mt-2">
           Every QR code below points to this address, with the table number added automatically.
         </p>
@@ -182,7 +186,10 @@ export default function QRGenerator() {
             </div>
           )}
         </div>
-        <p className="text-xs text-ink-500 mt-4 break-all max-w-xs text-center font-mono">{customerUrl}</p>
+        <div className="flex items-center gap-2 mt-4 max-w-xs">
+          <p className="text-xs text-ink-500 break-all text-center font-mono flex-1">{customerUrl}</p>
+          <CopyButton value={customerUrl} className="text-ink-300 hover:text-white text-xs" />
+        </div>
         <div className="flex gap-3 mt-5">
           <button
             onClick={downloadQR}
