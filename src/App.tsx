@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone, ShieldCheck } from 'lucide-react';
 import { getSlugFromPath, useResolveRestaurant, RestaurantProvider, signUpRestaurant, slugify } from '@/lib/restaurantContext';
 import { getCurrentUserId, onAuthChange, signOut } from '@/lib/sync';
@@ -74,20 +74,35 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
   // session exists — sessions are shared across the whole site).
   const [authState, setAuthState] = useState<'checking' | 'in' | 'out'>('checking');
 
+  // Read through a ref rather than depending on restaurant.ownerId directly
+  // below — this lets the auth check/subscription set up exactly ONCE and
+  // stay put for the lifetime of this screen, instead of tearing down and
+  // re-creating the listener every time the restaurant record refreshes
+  // (e.g. right after logging in). Re-subscribing repeatedly opened a race
+  // where an older, now-stale check could resolve AFTER a newer one and
+  // incorrectly overwrite "logged in" back to "logged out".
+  const ownerIdRef = useRef(restaurant.ownerId);
+  useEffect(() => {
+    ownerIdRef.current = restaurant.ownerId;
+  }, [restaurant.ownerId]);
+
   useEffect(() => {
     let cancelled = false;
     getCurrentUserId().then((uid) => {
       if (cancelled) return;
-      setAuthState(uid && restaurant.ownerId && uid === restaurant.ownerId ? 'in' : 'out');
+      setAuthState(uid && ownerIdRef.current && uid === ownerIdRef.current ? 'in' : 'out');
     });
     const unsub = onAuthChange((uid) => {
-      setAuthState(uid && restaurant.ownerId && uid === restaurant.ownerId ? 'in' : 'out');
+      setAuthState(uid && ownerIdRef.current && uid === ownerIdRef.current ? 'in' : 'out');
     });
     return () => {
       cancelled = true;
       unsub();
     };
-  }, [restaurant.ownerId]);
+    // Deliberately empty — see comment above. This should run once per
+    // mount of this screen, not once per restaurant-data refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onHash = () => {
