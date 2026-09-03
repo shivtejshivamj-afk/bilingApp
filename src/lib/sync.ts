@@ -31,7 +31,14 @@ export async function getCurrentUserId(): Promise<string | null> {
 }
 
 export function onAuthChange(callback: (userId: string | null) => void): () => void {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    // Supabase fires an 'INITIAL_SESSION' event immediately on subscribe,
+    // sometimes before it's fully finished reading the persisted session
+    // from storage — trusting it here could momentarily (and incorrectly)
+    // report "not logged in" right after a real login, racing against an
+    // explicit getCurrentUserId() check done elsewhere for the same
+    // purpose. Only forward genuine transitions.
+    if (event === 'INITIAL_SESSION') return;
     callback(session?.user.id ?? null);
   });
   return () => data.subscription.unsubscribe();
