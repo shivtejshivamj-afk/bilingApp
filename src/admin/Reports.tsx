@@ -167,7 +167,7 @@ export default function Reports() {
                   width={60}
                 />
                 <Tooltip
-                  formatter={(value: number) => [formatMoney(value, settings.currency), 'Revenue']}
+                  formatter={(value: any) => [formatMoney(Number(value ?? 0), settings.currency), 'Revenue']}
                   contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13 }}
                 />
                 <Line
@@ -197,8 +197,8 @@ export default function Reports() {
                     width={90}
                   />
                   <Tooltip
-                    formatter={(value: number, name: string, props: any) => [
-                      `${formatMoney(value, settings.currency)} (${props.payload.quantity} sold)`,
+                    formatter={(value: any, name: any, props: any) => [
+                      `${formatMoney(Number(value ?? 0), settings.currency)} (${props.payload.quantity} sold)`,
                       'Revenue',
                     ]}
                     contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13 }}
@@ -229,7 +229,7 @@ export default function Reports() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [`${value} sold`, name]}
+                    formatter={(value: any, name: any) => [`${value} sold`, name]}
                     contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13 }}
                   />
                 </PieChart>
