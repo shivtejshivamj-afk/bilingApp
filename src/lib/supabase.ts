@@ -4,5 +4,5 @@ const url = import.meta.env.VITE_SUPABASE_URL as string;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(url, anonKey, {
-  realtime: { params: { eventsPerSecond: 3 } },
+  realtime: { params: { eventsPerSecond: 10 } },
 });
