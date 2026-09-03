@@ -16,6 +16,7 @@ import {
 import type { MenuItem, Order, OrderItem, OrderItemStatus } from '@/types';
 import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
 import { fetchOrders, insertOrder, subscribeToOrderEvents } from '@/lib/sync';
+import { useRestaurantId } from '@/lib/restaurantContext';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
 
 interface CartLine {
@@ -61,6 +62,7 @@ function setSessionStart(tableNumber: number, value: number) {
 }
 
 export default function CustomerApp() {
+  const restaurantId = useRestaurantId();
   const { menu } = useMenu();
   const { settings } = useSettings();
   const { categories } = useCategories();
@@ -103,7 +105,7 @@ export default function CustomerApp() {
     let cancelled = false;
     (async () => {
       try {
-        const all = await fetchOrders();
+        const all = await fetchOrders(restaurantId);
         if (!cancelled) {
           setMyOrders(all.filter((o) => o.tableNumber === tableNumber));
         }
@@ -112,14 +114,14 @@ export default function CustomerApp() {
       }
     })();
     return () => { cancelled = true; };
-  }, [tableNumber]);
+  }, [restaurantId, tableNumber]);
 
   // Listen for realtime status updates
   useEffect(() => {
     if (tableNumber == null) return;
-    return subscribeToOrderEvents((event) => {
-      if (event.type === 'DELETE' && event.tableNumber === tableNumber) {
-        setMyOrders((prev) => prev.filter((o) => o.tableNumber !== event.tableNumber));
+    return subscribeToOrderEvents(restaurantId, (event) => {
+      if (event.type === 'DELETE') {
+        setMyOrders((prev) => prev.filter((o) => o.id !== event.orderId));
         return;
       }
       if (event.type === 'UPDATE' && event.order.tableNumber === tableNumber) {
@@ -139,7 +141,7 @@ export default function CustomerApp() {
         });
       }
     });
-  }, [tableNumber]);
+  }, [restaurantId, tableNumber]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -215,7 +217,7 @@ export default function CustomerApp() {
       customerNote: note.trim() || undefined,
     };
     setMyOrders((prev) => [order, ...prev]);
-    insertOrder(order).catch((e) => console.error('Failed to send order:', e));
+    insertOrder(restaurantId, order).catch((e) => console.error('Failed to send order:', e));
     setCart([]);
     setNote('');
     setView('placed');
