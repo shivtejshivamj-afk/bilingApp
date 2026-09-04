@@ -25,6 +25,29 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+export async function requestPasswordReset(email: string, redirectTo: string): Promise<{ error?: string }> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function updatePassword(newPassword: string): Promise<{ error?: string }> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { error: error.message };
+  return {};
+}
+
+/** Fires when the user arrives via a password-reset email link. Supabase
+ * establishes a temporary recovery session and emits this event once it
+ * detects the token in the URL — from there, updatePassword() can be used
+ * to actually change it. */
+export function onPasswordRecovery(callback: () => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') callback();
+  });
+  return () => data.subscription.unsubscribe();
+}
+
 export async function getCurrentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
@@ -347,6 +370,14 @@ export async function resetRestaurantData(restaurantId: string): Promise<void> {
   if (menuError) throw menuError;
   const { error: ordersError } = await supabase.from('orders').delete().eq('restaurant_id', restaurantId);
   if (ordersError) throw ordersError;
+}
+
+/** Permanently deletes the restaurant itself — menu items and orders cascade
+ * delete automatically via the database's foreign key setup. There is no
+ * undo. */
+export async function deleteRestaurant(restaurantId: string): Promise<void> {
+  const { error } = await supabase.from('restaurants').delete().eq('id', restaurantId);
+  if (error) throw error;
 }
 
 // ---------------------------------------------------------------------------
