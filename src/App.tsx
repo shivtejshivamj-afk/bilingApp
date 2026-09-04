@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone, ShieldCheck } from 'lucide-react';
 import { getSlugFromPath, useResolveRestaurant, RestaurantProvider, signUpRestaurant, slugify } from '@/lib/restaurantContext';
-import { getCurrentUserId, onAuthChange, signOut } from '@/lib/sync';
+import { getCurrentUserId, onAuthChange, onPasswordRecovery, signOut } from '@/lib/sync';
 import { useSettings } from '@/lib/useLocalData';
 import type { RestaurantRecord } from '@/lib/sync';
-import AdminLogin from '@/admin/AdminLogin';
+import AdminLogin, { SetNewPassword } from '@/admin/AdminLogin';
 import AdminDashboard from '@/admin/AdminDashboard';
 import CustomerApp from '@/customer/CustomerApp';
 
@@ -67,6 +67,16 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     return 'landing';
   });
 
+  // If this page load is the result of clicking a "reset your password"
+  // email link, Supabase fires this event once it's set up a temporary
+  // recovery session from the link's token — override normal routing to
+  // show the "set a new password" screen instead, regardless of which
+  // tab/hash the link happened to redirect to.
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  useEffect(() => {
+    return onPasswordRecovery(() => setRecoveryMode(true));
+  }, []);
+
   // Real auth state, sourced from Supabase's own session — not a flag we
   // invent ourselves. Also checks the signed-in user actually OWNS this
   // specific restaurant (someone logged into Restaurant A's account
@@ -113,6 +123,19 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  if (recoveryMode) {
+    return (
+      <SetNewPassword
+        restaurantName={settings.restaurantName}
+        onDone={() => {
+          setRecoveryMode(false);
+          window.location.hash = 'admin';
+          setRoute('admin');
+        }}
+      />
+    );
+  }
 
   if (route === 'customer') return <CustomerApp />;
 
