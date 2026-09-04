@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Settings as SettingsIcon, Save, Trash2, Wallet, Link2, Check, AlertCircle } from 'lucide-react';
 import { useSettings, useSales } from '@/lib/useLocalData';
 import { clearRestaurantLocalData } from '@/lib/storage';
-import { resetRestaurantData, changeRestaurantSlug } from '@/lib/sync';
+import { resetRestaurantData, changeRestaurantSlug, deleteRestaurant, signOut } from '@/lib/sync';
 import { useRestaurantId, getSlugFromPath, buildRestaurantUrl, slugify } from '@/lib/restaurantContext';
 import { CopyButton } from '@/components/CopyButton';
 import { ConfirmDialog } from '@/components/ui';
@@ -27,6 +27,10 @@ export default function AdminSettings() {
   const [saved, setSaved] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [customCurrency, setCustomCurrency] = useState(
     !CURRENCY_OPTIONS.some((c) => c.symbol === settings.currency)
   );
@@ -73,6 +77,22 @@ export default function AdminSettings() {
     }
   };
 
+  const deleteRestaurantPermanently = async () => {
+    if (deleteConfirmText !== settings.restaurantName) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteRestaurant(restaurantId);
+      clearRestaurantLocalData(restaurantId);
+      await signOut();
+      window.location.href = `${window.location.protocol}//${window.location.host}/`;
+    } catch (e: any) {
+      console.error('Failed to delete restaurant:', e);
+      setDeleteError(e?.message || 'Something went wrong deleting this restaurant. Please try again.');
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-2xl">
       <h2 className="text-xl font-bold text-ink-900 flex items-center gap-2">
@@ -90,56 +110,45 @@ export default function AdminSettings() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1.5">Master PIN</label>
-            <input
-              value={form.masterPin}
-              onChange={(e) => setForm({ ...form, masterPin: e.target.value })}
-              inputMode="numeric"
-              className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 tracking-widest"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1.5">Currency</label>
-            {!customCurrency ? (
-              <select
-                value={CURRENCY_OPTIONS.some((c) => c.symbol === form.currency) ? form.currency : '__custom__'}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    setCustomCurrency(true);
-                    return;
-                  }
-                  setForm({ ...form, currency: e.target.value });
-                }}
-                className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 bg-white"
+        <div>
+          <label className="block text-sm font-medium text-ink-700 mb-1.5">Currency</label>
+          {!customCurrency ? (
+            <select
+              value={CURRENCY_OPTIONS.some((c) => c.symbol === form.currency) ? form.currency : '__custom__'}
+              onChange={(e) => {
+                if (e.target.value === '__custom__') {
+                  setCustomCurrency(true);
+                  return;
+                }
+                setForm({ ...form, currency: e.target.value });
+              }}
+              className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900 bg-white"
+            >
+              {CURRENCY_OPTIONS.map((c) => (
+                <option key={c.symbol} value={c.symbol}>
+                  {c.symbol} — {c.label}
+                </option>
+              ))}
+              <option value="__custom__">Other (type your own)</option>
+            </select>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={form.currency}
+                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                maxLength={5}
+                placeholder="e.g. Rs, kr, ₦"
+                className="flex-1 px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
+              />
+              <button
+                type="button"
+                onClick={() => setCustomCurrency(false)}
+                className="px-3 py-2.5 rounded-lg border border-ink-200 text-sm text-ink-600 hover:bg-ink-50 whitespace-nowrap"
               >
-                {CURRENCY_OPTIONS.map((c) => (
-                  <option key={c.symbol} value={c.symbol}>
-                    {c.symbol} — {c.label}
-                  </option>
-                ))}
-                <option value="__custom__">Other (type your own)</option>
-              </select>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                  maxLength={5}
-                  placeholder="e.g. Rs, kr, ₦"
-                  className="flex-1 px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
-                />
-                <button
-                  type="button"
-                  onClick={() => setCustomCurrency(false)}
-                  className="px-3 py-2.5 rounded-lg border border-ink-200 text-sm text-ink-600 hover:bg-ink-50 whitespace-nowrap"
-                >
-                  Choose from list
-                </button>
-              </div>
-            )}
-          </div>
+                Choose from list
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -254,6 +263,20 @@ export default function AdminSettings() {
         </button>
       </div>
 
+      <div className="bg-paprika-50 rounded-2xl border border-paprika-300 p-5">
+        <h3 className="font-semibold text-paprika-900 mb-1">Delete Restaurant</h3>
+        <p className="text-sm text-paprika-700 mb-3">
+          Permanently deletes this restaurant, its menu, and every order — including its web address ({window.location.host}/{currentSlug}), which becomes available for someone else to use. This cannot be undone.
+        </p>
+        <button
+          onClick={() => { setDeleteConfirmText(''); setConfirmDelete(true); }}
+          className="px-4 py-2.5 rounded-lg bg-paprika-700 text-white text-sm font-semibold hover:bg-paprika-800 transition flex items-center gap-2"
+        >
+          <Trash2 size={16} />
+          Delete Restaurant Permanently
+        </button>
+      </div>
+
       <ConfirmDialog
         open={confirmReset}
         title="Reset all data?"
@@ -263,6 +286,40 @@ export default function AdminSettings() {
         onConfirm={resetAll}
         onCancel={() => setConfirmReset(false)}
       />
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink-950/50 backdrop-blur-sm" onClick={() => setConfirmDelete(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-ticket-lg p-6">
+            <h3 className="text-lg font-bold font-display text-ink-900 mb-2">Delete "{settings.restaurantName}"?</h3>
+            <p className="text-sm text-ink-500 mb-4">
+              This permanently deletes everything — menu, orders, and this restaurant itself. Type the restaurant name below to confirm.
+            </p>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={settings.restaurantName}
+              className="w-full px-3 py-2.5 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-paprika-400 mb-4"
+            />
+            {deleteError && <p className="text-paprika-600 text-sm mb-3">{deleteError}</p>}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-ink-600 hover:bg-ink-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteRestaurantPermanently}
+                disabled={deleteConfirmText !== settings.restaurantName || deleting}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-paprika-600 hover:bg-paprika-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {deleting ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
