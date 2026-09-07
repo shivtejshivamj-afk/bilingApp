@@ -20,6 +20,41 @@ import {
   subscribeToMenuEvents,
 } from './sync';
 import { useRestaurantId } from './restaurantContext';
+import type { RestaurantRecord } from './sync';
+
+// Shared, reference-counted realtime subscription for the restaurant's own
+// row — used by both useSettings() and useCategories() below. Without this,
+// each of those hooks would open its own separate realtime channel to the
+// exact same row, doubling the number of simultaneous connections for no
+// benefit. Fewer concurrent channels means less connection/auth overhead
+// overall.
+const restaurantListeners = new Map<string, Set<(r: RestaurantRecord) => void>>();
+const restaurantUnsubscribers = new Map<string, () => void>();
+
+function subscribeToRestaurantShared(restaurantId: string, listener: (r: RestaurantRecord) => void): () => void {
+  if (!restaurantListeners.has(restaurantId)) {
+    restaurantListeners.set(restaurantId, new Set());
+  }
+  const listeners = restaurantListeners.get(restaurantId)!;
+  listeners.add(listener);
+
+  if (!restaurantUnsubscribers.has(restaurantId)) {
+    const unsub = subscribeToRestaurantEvents(restaurantId, (record) => {
+      restaurantListeners.get(restaurantId)?.forEach((l) => l(record));
+    });
+    restaurantUnsubscribers.set(restaurantId, unsub);
+  }
+
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      restaurantUnsubscribers.get(restaurantId)?.();
+      restaurantUnsubscribers.delete(restaurantId);
+      restaurantListeners.delete(restaurantId);
+    }
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 // Menu — a real shared table now (previously local-storage-only), scoped to
@@ -140,6 +175,10 @@ export function useOrders() {
   // realtime event would otherwise require a manual page refresh to notice.
   useEffect(() => {
     const interval = setInterval(async () => {
+      // Skip polling while the tab isn't visible (e.g. minimized, or
+      // another tab is focused) — no one's watching it anyway, and it just
+      // adds unnecessary background network/auth traffic.
+      if (document.visibilityState !== 'visible') return;
       try {
         const data = await fetchOrders(restaurantId);
         const current = currentRef.current;
@@ -151,7 +190,7 @@ export function useOrders() {
       } catch {
         // Silently skip this poll — realtime or the next poll will catch up.
       }
-    }, 8000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [restaurantId, updateState]);
 
@@ -235,7 +274,7 @@ export function useSettings() {
   // Live updates whenever this restaurant's row changes (from any device —
   // admin changes currency -> customer phones update instantly).
   useEffect(() => {
-    return subscribeToRestaurantEvents(restaurantId, (record) => {
+    return subscribeToRestaurantShared(restaurantId, (record) => {
       storage.setSettingsCache(restaurantId, record.settings);
       setSettingsState(record.settings);
     });
@@ -293,7 +332,7 @@ export function useCategories() {
   }, [restaurantId]);
 
   useEffect(() => {
-    return subscribeToRestaurantEvents(restaurantId, () => {
+    return subscribeToRestaurantShared(restaurantId, () => {
       fetchCategories(restaurantId).then(setCategoriesState).catch(() => {});
     });
   }, [restaurantId]);
