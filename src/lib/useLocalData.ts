@@ -61,45 +61,92 @@ function subscribeToRestaurantShared(restaurantId: string, listener: (r: Restaur
 // the current restaurant.
 // ---------------------------------------------------------------------------
 
-export function useMenu() {
-  const restaurantId = useRestaurantId();
-  const [menu, setMenuState] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const currentRef = useRef<MenuItem[]>([]);
+// Same shared-store approach as useOrders() below — useMenu() is called
+// from several places at once (CustomerApp, MenuManager, ManualOrderModal),
+// so this avoids each one opening its own separate realtime connection.
+interface MenuStore {
+  menu: MenuItem[];
+  loading: boolean;
+  listeners: Set<() => void>;
+  refCount: number;
+  teardown: () => void;
+}
 
-  const updateState = useCallback((next: MenuItem[]) => {
-    currentRef.current = next;
-    setMenuState(next);
-  }, []);
+const menuStores = new Map<string, MenuStore>();
 
-  const refresh = useCallback(async () => {
+function getOrCreateMenuStore(restaurantId: string): MenuStore {
+  let store = menuStores.get(restaurantId);
+  if (store) return store;
+
+  store = { menu: [], loading: true, listeners: new Set(), refCount: 0, teardown: () => {} };
+  menuStores.set(restaurantId, store);
+
+  const notify = () => store!.listeners.forEach((l) => l());
+
+  const refresh = async () => {
     try {
       const data = await fetchMenu(restaurantId);
-      updateState(data);
+      store!.menu = data;
     } catch (e) {
       console.error('Failed to load menu:', e);
     } finally {
-      setLoading(false);
+      store!.loading = false;
+      notify();
     }
-  }, [restaurantId, updateState]);
+  };
+
+  refresh();
+  const unsub = subscribeToMenuEvents(restaurantId, refresh);
+
+  store.teardown = () => {
+    unsub();
+    menuStores.delete(restaurantId);
+  };
+
+  return store;
+}
+
+export function useMenu() {
+  const restaurantId = useRestaurantId();
+  const [, forceRender] = useState(0);
+  const storeRef = useRef<MenuStore | null>(null);
+
+  if (!storeRef.current) {
+    storeRef.current = getOrCreateMenuStore(restaurantId);
+  }
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    const store = getOrCreateMenuStore(restaurantId);
+    storeRef.current = store;
+    store.refCount++;
+    const listener = () => forceRender((n) => n + 1);
+    store.listeners.add(listener);
+    forceRender((n) => n + 1);
 
-  useEffect(() => {
-    return subscribeToMenuEvents(restaurantId, refresh);
-  }, [restaurantId, refresh]);
+    return () => {
+      store.listeners.delete(listener);
+      store.refCount--;
+      if (store.refCount <= 0) {
+        setTimeout(() => {
+          if (store.refCount <= 0) store.teardown();
+        }, 2000);
+      }
+    };
+  }, [restaurantId]);
+
+  const store = storeRef.current;
 
   // Callers pass the FULL next array (same shape as the old local-storage
   // API, to avoid touching every call site) — we diff against what we had
   // and turn that into the right upsert/delete calls against Supabase.
   const save = useCallback(
     (next: MenuItem[]) => {
-      const prevIds = new Set(currentRef.current.map((m) => m.id));
+      const s = getOrCreateMenuStore(restaurantId);
+      const prevIds = new Set(s.menu.map((m) => m.id));
       const nextIds = new Set(next.map((m) => m.id));
       const toDelete = [...prevIds].filter((id) => !nextIds.has(id));
-      updateState(next);
+      s.menu = next;
+      s.listeners.forEach((l) => l());
 
       Promise.all([
         ...toDelete.map((id) =>
@@ -110,111 +157,184 @@ export function useMenu() {
         ),
       ]);
     },
-    [restaurantId, updateState]
+    [restaurantId]
   );
 
-  return { menu, loading, setMenu: save };
+  return { menu: store.menu, loading: store.loading, setMenu: save };
 }
 
 // ---------------------------------------------------------------------------
 // Orders — scoped to the current restaurant.
 // ---------------------------------------------------------------------------
 
+// Shared, reference-counted store: every component that calls useOrders()
+// for the same restaurant shares ONE underlying fetch, ONE realtime
+// connection, and ONE polling timer, instead of each caller independently
+// opening its own (this hook is called from several places at once —
+// AdminDashboard, OrderManagement, TableManagement — and duplicating all of
+// that per-caller was real, unnecessary load, contributing to hitting
+// Supabase's rate limits under normal use).
+interface OrdersStore {
+  orders: Order[];
+  loading: boolean;
+  error: string | null;
+  listeners: Set<() => void>;
+  refCount: number;
+  teardown: () => void;
+}
+
+const orderStores = new Map<string, OrdersStore>();
+
+function getOrCreateOrderStore(restaurantId: string): OrdersStore {
+  let store = orderStores.get(restaurantId);
+  if (store) return store;
+
+  store = {
+    orders: [],
+    loading: true,
+    error: null,
+    listeners: new Set(),
+    refCount: 0,
+    teardown: () => {},
+  };
+  orderStores.set(restaurantId, store);
+
+  const notify = () => store!.listeners.forEach((l) => l());
+
+  const setOrders = (next: Order[]) => {
+    store!.orders = next;
+    notify();
+  };
+
+  let cancelled = false;
+
+  fetchOrders(restaurantId)
+    .then((data) => {
+      if (cancelled) return;
+      store!.orders = data;
+      store!.loading = false;
+      store!.error = null;
+      notify();
+    })
+    .catch((e: any) => {
+      if (cancelled) return;
+      store!.loading = false;
+      store!.error = e?.message ?? 'Failed to load orders';
+      notify();
+    });
+
+  const unsubRealtime = subscribeToOrderEvents(restaurantId, (event) => {
+    const current = store!.orders;
+    if (event.type === 'INSERT') {
+      if (!current.find((o) => o.id === event.order.id)) {
+        setOrders([event.order, ...current]);
+      }
+    } else if (event.type === 'UPDATE') {
+      setOrders(current.map((o) => (o.id === event.order.id ? event.order : o)));
+    } else if (event.type === 'DELETE') {
+      setOrders(current.filter((o) => o.id !== event.orderId));
+    }
+  });
+
+  // Safety-net polling: re-fetches periodically so orders still show up
+  // promptly even if realtime hiccups for any reason — skipped while the
+  // tab isn't visible, since no one's watching it anyway.
+  const interval = setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      const data = await fetchOrders(restaurantId);
+      const current = store!.orders;
+      const changed =
+        data.length !== current.length ||
+        data.some((o, i) => o.id !== current[i]?.id || o.status !== current[i]?.status ||
+          JSON.stringify(o.items) !== JSON.stringify(current[i]?.items));
+      if (changed) setOrders(data);
+    } catch {
+      // Silently skip this poll — realtime or the next poll will catch up.
+    }
+  }, 15000);
+
+  store.teardown = () => {
+    cancelled = true;
+    unsubRealtime();
+    clearInterval(interval);
+    orderStores.delete(restaurantId);
+  };
+
+  return store;
+}
+
 export function useOrders() {
   const restaurantId = useRestaurantId();
-  const [orders, setOrdersState] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const currentRef = useRef<Order[]>([]);
+  const [, forceRender] = useState(0);
+  const storeRef = useRef<OrdersStore | null>(null);
 
-  const updateState = useCallback((next: Order[]) => {
-    currentRef.current = next;
-    setOrdersState(next);
-  }, []);
+  if (!storeRef.current) {
+    storeRef.current = getOrCreateOrderStore(restaurantId);
+  }
 
-  // Load from Supabase on mount / whenever the restaurant changes
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const data = await fetchOrders(restaurantId);
-        if (!cancelled) {
-          updateState(data);
-          setError(null);
-        }
-      } catch (e: any) {
-        if (!cancelled) setError(e.message ?? 'Failed to load orders');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [restaurantId, updateState]);
+    const store = getOrCreateOrderStore(restaurantId);
+    storeRef.current = store;
+    store.refCount++;
+    const listener = () => forceRender((n) => n + 1);
+    store.listeners.add(listener);
+    forceRender((n) => n + 1); // pick up anything that arrived before this effect ran
 
-  // Subscribe to realtime changes — primary source of cross-device sync
-  useEffect(() => {
-    const unsub = subscribeToOrderEvents(restaurantId, (event) => {
-      const current = currentRef.current;
-      if (event.type === 'INSERT') {
-        if (!current.find((o) => o.id === event.order.id)) {
-          updateState([event.order, ...current]);
-        }
-      } else if (event.type === 'UPDATE') {
-        updateState(current.map((o) => (o.id === event.order.id ? event.order : o)));
-      } else if (event.type === 'DELETE') {
-        updateState(current.filter((o) => o.id !== event.orderId));
+    return () => {
+      store.listeners.delete(listener);
+      store.refCount--;
+      if (store.refCount <= 0) {
+        // Give a brief grace period before tearing down — avoids a
+        // pointless disconnect+reconnect when e.g. switching tabs quickly
+        // causes one consumer to unmount right as another is about to
+        // mount for the same restaurant.
+        setTimeout(() => {
+          if (store.refCount <= 0) store.teardown();
+        }, 2000);
       }
-    });
-    return unsub;
-  }, [restaurantId, updateState]);
+    };
+  }, [restaurantId]);
 
-  // Safety-net polling: re-fetches every few seconds so orders still show up
-  // promptly even if realtime hiccups for any reason (e.g. a dropped
-  // websocket, or a Supabase project setting) — without this, a missed
-  // realtime event would otherwise require a manual page refresh to notice.
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      // Skip polling while the tab isn't visible (e.g. minimized, or
-      // another tab is focused) — no one's watching it anyway, and it just
-      // adds unnecessary background network/auth traffic.
-      if (document.visibilityState !== 'visible') return;
-      try {
-        const data = await fetchOrders(restaurantId);
-        const current = currentRef.current;
-        const changed =
-          data.length !== current.length ||
-          data.some((o, i) => o.id !== current[i]?.id || o.status !== current[i]?.status ||
-            JSON.stringify(o.items) !== JSON.stringify(current[i]?.items));
-        if (changed) updateState(data);
-      } catch {
-        // Silently skip this poll — realtime or the next poll will catch up.
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [restaurantId, updateState]);
+  const store = storeRef.current;
 
   const addOrder = useCallback(async (order: Order): Promise<void> => {
-    updateState([order, ...currentRef.current]);
+    const s = getOrCreateOrderStore(restaurantId);
+    s.orders = [order, ...s.orders];
+    s.listeners.forEach((l) => l());
     await insertOrder(restaurantId, order);
-  }, [restaurantId, updateState]);
+  }, [restaurantId]);
 
   const patchOrder = useCallback(async (order: Order): Promise<void> => {
-    updateState(currentRef.current.map((o) => (o.id === order.id ? order : o)));
+    const s = getOrCreateOrderStore(restaurantId);
+    s.orders = s.orders.map((o) => (o.id === order.id ? order : o));
+    s.listeners.forEach((l) => l());
     await updateOrder(restaurantId, order);
-  }, [restaurantId, updateState]);
+  }, [restaurantId]);
 
   const removeOrdersByTable = useCallback(async (tableNumber: number): Promise<void> => {
-    updateState(currentRef.current.filter((o) => o.tableNumber !== tableNumber));
+    const s = getOrCreateOrderStore(restaurantId);
+    s.orders = s.orders.filter((o) => o.tableNumber !== tableNumber);
+    s.listeners.forEach((l) => l());
     await deleteOrdersByTable(restaurantId, tableNumber);
-  }, [restaurantId, updateState]);
+  }, [restaurantId]);
 
   const removeOrder = useCallback(async (orderId: string): Promise<void> => {
-    updateState(currentRef.current.filter((o) => o.id !== orderId));
+    const s = getOrCreateOrderStore(restaurantId);
+    s.orders = s.orders.filter((o) => o.id !== orderId);
+    s.listeners.forEach((l) => l());
     await deleteOrderById(restaurantId, orderId);
-  }, [restaurantId, updateState]);
+  }, [restaurantId]);
 
-  return { orders, loading, error, addOrder, patchOrder, removeOrdersByTable, removeOrder };
+  return {
+    orders: store.orders,
+    loading: store.loading,
+    error: store.error,
+    addOrder,
+    patchOrder,
+    removeOrdersByTable,
+    removeOrder,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -251,38 +371,95 @@ export function useSoundPreference() {
 // row now, not a singleton `app_settings` table).
 // ---------------------------------------------------------------------------
 
+// Shared store — same reasoning as useOrders()/useMenu() above. Even though
+// the realtime subscription was already deduped via
+// subscribeToRestaurantShared, this hook is called from around a dozen
+// places at once, and each one was independently doing its own initial
+// fetch on mount — up to several simultaneous authenticated requests every
+// time more than one admin screen/component happened to mount together.
+interface SettingsStore {
+  settings: Settings;
+  listeners: Set<() => void>;
+  refCount: number;
+  teardown: () => void;
+}
+
+const settingsStores = new Map<string, SettingsStore>();
+
+function getOrCreateSettingsStore(restaurantId: string): SettingsStore {
+  let store = settingsStores.get(restaurantId);
+  if (store) return store;
+
+  store = {
+    settings: storage.getSettingsCache(restaurantId),
+    listeners: new Set(),
+    refCount: 0,
+    teardown: () => {},
+  };
+  settingsStores.set(restaurantId, store);
+
+  const notify = () => store!.listeners.forEach((l) => l());
+
+  fetchRestaurantById(restaurantId)
+    .then((record) => {
+      if (!record) return;
+      storage.setSettingsCache(restaurantId, record.settings);
+      store!.settings = record.settings;
+      notify();
+    })
+    .catch(() => {
+      // Offline or unreachable — keep using the local cache.
+    });
+
+  const unsub = subscribeToRestaurantShared(restaurantId, (record) => {
+    storage.setSettingsCache(restaurantId, record.settings);
+    store!.settings = record.settings;
+    notify();
+  });
+
+  store.teardown = () => {
+    unsub();
+    settingsStores.delete(restaurantId);
+  };
+
+  return store;
+}
+
 export function useSettings() {
   const restaurantId = useRestaurantId();
-  const [settings, setSettingsState] = useState<Settings>(() => storage.getSettingsCache(restaurantId));
+  const [, forceRender] = useState(0);
+  const storeRef = useRef<SettingsStore | null>(null);
 
-  // Initial load — the local cache gives instant paint, but the database is
-  // always the real source of truth, so fetch it fresh on mount too.
+  if (!storeRef.current) {
+    storeRef.current = getOrCreateSettingsStore(restaurantId);
+  }
+
   useEffect(() => {
-    let cancelled = false;
-    fetchRestaurantById(restaurantId)
-      .then((record) => {
-        if (cancelled || !record) return;
-        storage.setSettingsCache(restaurantId, record.settings);
-        setSettingsState(record.settings);
-      })
-      .catch(() => {
-        // Offline or unreachable — keep using the local cache.
-      });
-    return () => { cancelled = true; };
+    const store = getOrCreateSettingsStore(restaurantId);
+    storeRef.current = store;
+    store.refCount++;
+    const listener = () => forceRender((n) => n + 1);
+    store.listeners.add(listener);
+    forceRender((n) => n + 1);
+
+    return () => {
+      store.listeners.delete(listener);
+      store.refCount--;
+      if (store.refCount <= 0) {
+        setTimeout(() => {
+          if (store.refCount <= 0) store.teardown();
+        }, 2000);
+      }
+    };
   }, [restaurantId]);
 
-  // Live updates whenever this restaurant's row changes (from any device —
-  // admin changes currency -> customer phones update instantly).
-  useEffect(() => {
-    return subscribeToRestaurantShared(restaurantId, (record) => {
-      storage.setSettingsCache(restaurantId, record.settings);
-      setSettingsState(record.settings);
-    });
-  }, [restaurantId]);
+  const store = storeRef.current;
 
   const save = useCallback((next: Settings) => {
+    const s = getOrCreateSettingsStore(restaurantId);
     storage.setSettingsCache(restaurantId, next);
-    setSettingsState(next);
+    s.settings = next;
+    s.listeners.forEach((l) => l());
     broadcastFullSync();
     saveSettingsRemote(restaurantId, next).catch(() => {
       // If this fails (offline), the local change still applies on this
@@ -290,7 +467,7 @@ export function useSettings() {
     });
   }, [restaurantId]);
 
-  return { settings, setSettings: save };
+  return { settings: store.settings, setSettings: save };
 }
 
 // ---------------------------------------------------------------------------
@@ -319,28 +496,84 @@ export function useSales() {
 // Categories — a column on the restaurant's own row.
 // ---------------------------------------------------------------------------
 
+interface CategoriesStore {
+  categories: string[];
+  listeners: Set<() => void>;
+  refCount: number;
+  teardown: () => void;
+}
+
+const categoriesStores = new Map<string, CategoriesStore>();
+
+function getOrCreateCategoriesStore(restaurantId: string): CategoriesStore {
+  let store = categoriesStores.get(restaurantId);
+  if (store) return store;
+
+  store = { categories: [], listeners: new Set(), refCount: 0, teardown: () => {} };
+  categoriesStores.set(restaurantId, store);
+
+  const notify = () => store!.listeners.forEach((l) => l());
+
+  fetchCategories(restaurantId)
+    .then((data) => {
+      store!.categories = data;
+      notify();
+    })
+    .catch(() => {});
+
+  const unsub = subscribeToRestaurantShared(restaurantId, () => {
+    fetchCategories(restaurantId)
+      .then((data) => {
+        store!.categories = data;
+        notify();
+      })
+      .catch(() => {});
+  });
+
+  store.teardown = () => {
+    unsub();
+    categoriesStores.delete(restaurantId);
+  };
+
+  return store;
+}
+
 export function useCategories() {
   const restaurantId = useRestaurantId();
-  const [categories, setCategoriesState] = useState<string[]>([]);
+  const [, forceRender] = useState(0);
+  const storeRef = useRef<CategoriesStore | null>(null);
+
+  if (!storeRef.current) {
+    storeRef.current = getOrCreateCategoriesStore(restaurantId);
+  }
 
   useEffect(() => {
-    let cancelled = false;
-    fetchCategories(restaurantId)
-      .then((data) => { if (!cancelled) setCategoriesState(data); })
-      .catch(() => {});
-    return () => { cancelled = true; };
+    const store = getOrCreateCategoriesStore(restaurantId);
+    storeRef.current = store;
+    store.refCount++;
+    const listener = () => forceRender((n) => n + 1);
+    store.listeners.add(listener);
+    forceRender((n) => n + 1);
+
+    return () => {
+      store.listeners.delete(listener);
+      store.refCount--;
+      if (store.refCount <= 0) {
+        setTimeout(() => {
+          if (store.refCount <= 0) store.teardown();
+        }, 2000);
+      }
+    };
   }, [restaurantId]);
 
-  useEffect(() => {
-    return subscribeToRestaurantShared(restaurantId, () => {
-      fetchCategories(restaurantId).then(setCategoriesState).catch(() => {});
-    });
-  }, [restaurantId]);
+  const store = storeRef.current;
 
   const save = useCallback((next: string[]) => {
-    setCategoriesState(next);
+    const s = getOrCreateCategoriesStore(restaurantId);
+    s.categories = next;
+    s.listeners.forEach((l) => l());
     saveCategoriesRemote(restaurantId, next).catch((e) => console.error('Failed to save categories:', e));
   }, [restaurantId]);
 
-  return { categories, setCategories: save };
+  return { categories: store.categories, setCategories: save };
 }
