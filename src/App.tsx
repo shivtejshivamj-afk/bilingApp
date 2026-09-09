@@ -7,14 +7,21 @@ import type { RestaurantRecord } from '@/lib/sync';
 import AdminLogin, { SetNewPassword } from '@/admin/AdminLogin';
 import AdminDashboard from '@/admin/AdminDashboard';
 import CustomerApp from '@/customer/CustomerApp';
+import PlatformAdmin from './PlatformAdmin';
 
 function isCustomerRoute(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.has('table');
 }
 
+// Reserved — not available as a restaurant's own URL, since it's where you
+// (the platform owner) go to approve or reject new restaurant signups.
+const PLATFORM_ADMIN_SLUG = '_platform';
+
 export default function App() {
   const slug = getSlugFromPath();
+
+  if (slug === PLATFORM_ADMIN_SLUG) return <PlatformAdmin />;
 
   // No slug in the URL at all -> this is the platform's own landing page,
   // where a new restaurant can sign up.
@@ -160,6 +167,12 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
         />
       );
     }
+    if (restaurant.status === 'pending') {
+      return <PendingApproval restaurantName={settings.restaurantName} onLogout={async () => { await signOut(); setAuthState('out'); }} />;
+    }
+    if (restaurant.status === 'rejected') {
+      return <SignupRejected restaurantName={settings.restaurantName} onLogout={async () => { await signOut(); setAuthState('out'); }} />;
+    }
     return (
       <AdminDashboard
         onLogout={async () => {
@@ -203,6 +216,40 @@ function RestaurantLanding({ onEnterAdmin }: { onEnterAdmin: () => void }) {
           <FeatureCard icon={Sparkles} title="Live Reports" desc="Interactive revenue charts, always up to date." />
         </div>
       </div>
+    </div>
+  );
+}
+
+function PendingApproval({ restaurantName, onLogout }: { restaurantName: string; onLogout: () => void }) {
+  return (
+    <div className="min-h-screen bg-ink-900 text-white flex flex-col items-center justify-center px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-saffron-500 flex items-center justify-center mb-6">
+        <Sparkles size={30} />
+      </div>
+      <h1 className="text-2xl font-display font-semibold mb-2">{restaurantName} is awaiting approval</h1>
+      <p className="text-ink-400 max-w-sm mb-6">
+        Your account was created successfully, but a platform admin needs to approve your restaurant before your dashboard unlocks. This is usually quick — check back soon.
+      </p>
+      <button onClick={onLogout} className="text-paprika-300 hover:text-paprika-200 font-medium underline underline-offset-4">
+        Sign out
+      </button>
+    </div>
+  );
+}
+
+function SignupRejected({ restaurantName, onLogout }: { restaurantName: string; onLogout: () => void }) {
+  return (
+    <div className="min-h-screen bg-ink-900 text-white flex flex-col items-center justify-center px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-paprika-500 flex items-center justify-center mb-6">
+        <Utensils size={30} />
+      </div>
+      <h1 className="text-2xl font-display font-semibold mb-2">{restaurantName} wasn't approved</h1>
+      <p className="text-ink-400 max-w-sm mb-6">
+        This restaurant's signup wasn't approved. If you think this is a mistake, please get in touch with the platform owner.
+      </p>
+      <button onClick={onLogout} className="text-paprika-300 hover:text-paprika-200 font-medium underline underline-offset-4">
+        Sign out
+      </button>
     </div>
   );
 }
@@ -259,6 +306,10 @@ function PlatformLanding() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !effectiveSlug || !email.trim() || !password) return;
+    if (effectiveSlug === PLATFORM_ADMIN_SLUG) {
+      setError('That URL is reserved — please choose a different one.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
