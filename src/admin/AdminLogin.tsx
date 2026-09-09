@@ -132,7 +132,14 @@ function ResetPasswordRequest({
     setSubmitting(true);
     setError(null);
     const slug = getSlugFromPath() ?? '';
-    const redirectTo = buildRestaurantUrl(slug, { admin: true });
+    // Deliberately no #admin here — Supabase appends its own recovery data
+    // (#access_token=...&type=recovery) onto this URL when the email link
+    // is clicked. If the URL we hand it already has a #admin fragment,
+    // that collides with Supabase's own hash and the recovery token can't
+    // be parsed correctly, so the reset silently fails. The app already
+    // sends the user to #admin on its own once the password is actually
+    // set (see SetNewPassword's onDone in App.tsx).
+    const redirectTo = buildRestaurantUrl(slug);
     const result = await requestPasswordReset(email, redirectTo);
     if (result.error) {
       setError(result.error);
