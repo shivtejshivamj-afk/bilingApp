@@ -80,10 +80,13 @@ export async function claimRestaurant(restaurantId: string, ownerId: string): Pr
 // these via restaurant_id.
 // ---------------------------------------------------------------------------
 
+export type RestaurantStatus = 'pending' | 'approved' | 'rejected';
+
 export interface RestaurantRecord {
   id: string;
   slug: string;
   ownerId: string | null;
+  status: RestaurantStatus;
   settings: Settings;
 }
 
@@ -92,6 +95,7 @@ function rowToRestaurant(row: any): RestaurantRecord {
     id: row.id,
     slug: row.slug,
     ownerId: row.owner_id ?? null,
+    status: (row.status ?? 'approved') as RestaurantStatus,
     settings: {
       restaurantName: row.name,
       masterPin: row.master_pin,
@@ -122,7 +126,7 @@ export async function fetchRestaurantBySlug(slug: string): Promise<RestaurantRec
 export async function createRestaurant(slug: string, name: string, ownerId: string): Promise<RestaurantRecord | null> {
   const { data, error } = await supabase
     .from('restaurants')
-    .insert({ slug, name, owner_id: ownerId, created_at: Date.now() })
+    .insert({ slug, name, owner_id: ownerId, status: 'pending', created_at: Date.now() })
     .select()
     .maybeSingle();
   if (error) {
@@ -131,6 +135,24 @@ export async function createRestaurant(slug: string, name: string, ownerId: stri
     throw error;
   }
   return data ? rowToRestaurant(data) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Platform admin — approving/rejecting new restaurant signups. Gated by a
+// password screen client-side (see PlatformAdmin.tsx), not a real separate
+// login system — see the migration this ships with for the security
+// trade-off that implies.
+// ---------------------------------------------------------------------------
+
+export async function fetchAllRestaurants(): Promise<RestaurantRecord[]> {
+  const { data, error } = await supabase.from('restaurants').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(rowToRestaurant);
+}
+
+export async function setRestaurantStatus(restaurantId: string, status: RestaurantStatus): Promise<void> {
+  const { error } = await supabase.rpc('set_restaurant_status', { target_id: restaurantId, new_status: status });
+  if (error) throw error;
 }
 
 export async function fetchCategories(restaurantId: string): Promise<string[]> {
