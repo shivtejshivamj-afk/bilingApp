@@ -142,9 +142,19 @@ export function useMenu() {
   const save = useCallback(
     (next: MenuItem[]) => {
       const s = getOrCreateMenuStore(restaurantId);
-      const prevIds = new Set(s.menu.map((m) => m.id));
+      const prevById = new Map(s.menu.map((m) => [m.id, m]));
       const nextIds = new Set(next.map((m) => m.id));
-      const toDelete = [...prevIds].filter((id) => !nextIds.has(id));
+      const toDelete = [...prevById.keys()].filter((id) => !nextIds.has(id));
+      // Only send items that are actually new or actually changed — sending
+      // the WHOLE array on every single edit (as this used to do) meant
+      // adding one item fired off an upsert for every other existing item
+      // too, all at once. With more than a couple of menu items, that's a
+      // real burst of simultaneous requests for something that should be
+      // one small write.
+      const toUpsert = next.filter((m) => {
+        const prev = prevById.get(m.id);
+        return !prev || JSON.stringify(prev) !== JSON.stringify(m);
+      });
       s.menu = next;
       s.listeners.forEach((l) => l());
 
@@ -152,7 +162,7 @@ export function useMenu() {
         ...toDelete.map((id) =>
           deleteMenuItem(restaurantId, id).catch((e) => console.error('Failed to delete menu item:', e))
         ),
-        ...next.map((m) =>
+        ...toUpsert.map((m) =>
           upsertMenuItem(restaurantId, m).catch((e) => console.error('Failed to save menu item:', e))
         ),
       ]);
