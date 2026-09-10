@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Lock, Check, X, Clock, Store, RefreshCw } from 'lucide-react';
-import { fetchAllRestaurants, setRestaurantStatus, type RestaurantRecord } from '@/lib/sync';
+import { ShieldCheck, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, type RestaurantRecord } from '@/lib/sync';
 
 // Gates this panel client-side, the same trade-off already used for the
 // legacy PIN system elsewhere in this app — set VITE_PLATFORM_ADMIN_PASSWORD
@@ -75,6 +75,8 @@ function PlatformAdminDashboard() {
   const [restaurants, setRestaurants] = useState<RestaurantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RestaurantRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -100,6 +102,20 @@ function PlatformAdminDashboard() {
       console.error('Failed to update restaurant status:', e);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteRestaurant(deleteTarget.id);
+      setRestaurants((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error('Failed to delete restaurant:', e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -181,13 +197,42 @@ function PlatformAdminDashboard() {
                   <p className="font-medium text-ink-900 truncate">{r.settings.restaurantName}</p>
                   <p className="text-xs text-ink-500 font-mono truncate">/{r.slug}</p>
                 </div>
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
-                    r.status === 'approved' ? 'bg-basil-100 text-basil-700' : 'bg-paprika-100 text-paprika-700'
-                  }`}
-                >
-                  {r.status}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      r.status === 'approved' ? 'bg-basil-100 text-basil-700' : 'bg-paprika-100 text-paprika-700'
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                  {r.status === 'rejected' && (
+                    <button
+                      onClick={() => act(r.id, 'approved')}
+                      disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
+                      title="Re-approve this restaurant"
+                    >
+                      <RotateCcw size={13} /> Re-approve
+                    </button>
+                  )}
+                  {r.status === 'approved' && (
+                    <button
+                      onClick={() => act(r.id, 'rejected')}
+                      disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-paprika-50 text-paprika-600 text-xs font-semibold hover:bg-paprika-100 transition flex items-center gap-1 disabled:opacity-40"
+                      title="Reject this restaurant"
+                    >
+                      <X size={13} /> Reject
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDeleteTarget(r)}
+                    className="p-1.5 rounded-lg text-ink-300 hover:text-paprika-600 hover:bg-paprika-50 transition-colors"
+                    title="Delete permanently"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             ))}
             {others.length === 0 && !loading && (
@@ -196,6 +241,38 @@ function PlatformAdminDashboard() {
           </div>
         </section>
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink-950/50 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-ticket-lg p-6">
+            <h3 className="text-lg font-bold font-display text-ink-900 mb-2">
+              Delete "{deleteTarget.settings.restaurantName}"?
+            </h3>
+            <p className="text-sm text-ink-500 mb-2">
+              This permanently deletes this restaurant's menu, orders, and the restaurant record itself. This can't be undone.
+            </p>
+            <p className="text-xs text-ink-400 mb-4">
+              Note: their login account itself isn't deleted by this (that requires separate access Supabase doesn't allow safely from this panel) — but with no restaurant left, it won't be usable to access anything here.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-ink-600 hover:bg-ink-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-paprika-600 hover:bg-paprika-700 disabled:opacity-40 transition-colors"
+              >
+                {deleting ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
