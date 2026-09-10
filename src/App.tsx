@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone, ShieldCheck } from 'lucide-react';
 import { getSlugFromPath, useResolveRestaurant, RestaurantProvider, signUpRestaurant, slugify } from '@/lib/restaurantContext';
-import { getCurrentUserId, onAuthChange, onPasswordRecovery, signOut } from '@/lib/sync';
+import { getCurrentUserId, onAuthChange, signOut, fetchRestaurantBySlug } from '@/lib/sync';
 import { useSettings } from '@/lib/useLocalData';
 import type { RestaurantRecord } from '@/lib/sync';
 import AdminLogin, { SetNewPassword } from '@/admin/AdminLogin';
@@ -14,12 +14,29 @@ function isCustomerRoute(): boolean {
   return params.has('table');
 }
 
+// Checked directly against the URL rather than waiting for Supabase's
+// PASSWORD_RECOVERY event — that event can fire (and get missed) before our
+// listener even has a chance to subscribe, since Supabase processes the
+// link's token as soon as the page loads, which can be earlier than a
+// restaurant's data has finished resolving and mounted the component that
+// was listening for it. Checking the raw URL is immediate and can't race.
+function isPasswordRecoveryUrl(): boolean {
+  return window.location.hash.includes('type=recovery');
+}
+
 // Reserved — not available as a restaurant's own URL, since it's where you
 // (the platform owner) go to approve or reject new restaurant signups.
 const PLATFORM_ADMIN_SLUG = '_platform';
 
 export default function App() {
   const slug = getSlugFromPath();
+
+  // Handled before anything else, independent of restaurant resolution —
+  // setting a new password shouldn't have to wait on (or race against) a
+  // database fetch that has nothing to do with it.
+  if (isPasswordRecoveryUrl()) {
+    return <PasswordRecoveryGate slug={slug} />;
+  }
 
   if (slug === PLATFORM_ADMIN_SLUG) return <PlatformAdmin />;
 
@@ -28,6 +45,32 @@ export default function App() {
   if (!slug) return <PlatformLanding />;
 
   return <ResolvedRestaurant slug={slug} />;
+}
+
+// Independent of the normal restaurant-resolution flow on purpose — see the
+// comment on isPasswordRecoveryUrl() above for why. The restaurant name
+// shown here is just cosmetic, fetched best-effort in the background; the
+// reset form itself doesn't wait on it.
+function PasswordRecoveryGate({ slug }: { slug: string | null }) {
+  const [restaurantName, setRestaurantName] = useState('Your Restaurant');
+
+  useEffect(() => {
+    if (!slug) return;
+    fetchRestaurantBySlug(slug)
+      .then((r) => { if (r) setRestaurantName(r.settings.restaurantName); })
+      .catch(() => {});
+  }, [slug]);
+
+  return (
+    <SetNewPassword
+      restaurantName={restaurantName}
+      onDone={() => {
+        // Full navigation (not client-side state) so we land cleanly back
+        // in the normal app flow with a fresh, correctly-routed load.
+        window.location.href = slug ? `/${slug}#admin` : '/';
+      }}
+    />
+  );
 }
 
 function ResolvedRestaurant({ slug }: { slug: string }) {
@@ -75,14 +118,9 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
   });
 
   // If this page load is the result of clicking a "reset your password"
-  // email link, Supabase fires this event once it's set up a temporary
-  // recovery session from the link's token — override normal routing to
-  // show the "set a new password" screen instead, regardless of which
-  // tab/hash the link happened to redirect to.
-  const [recoveryMode, setRecoveryMode] = useState(false);
-  useEffect(() => {
-    return onPasswordRecovery(() => setRecoveryMode(true));
-  }, []);
+  // email link, App() already caught it at the top level (before this
+  // component even mounted) and routed to PasswordRecoveryGate instead of
+  // here — so no recovery-specific handling is needed at this level.
 
   // Real auth state, sourced from Supabase's own session — not a flag we
   // invent ourselves. Also checks the signed-in user actually OWNS this
@@ -130,19 +168,6 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-
-  if (recoveryMode) {
-    return (
-      <SetNewPassword
-        restaurantName={settings.restaurantName}
-        onDone={() => {
-          setRecoveryMode(false);
-          window.location.hash = 'admin';
-          setRoute('admin');
-        }}
-      />
-    );
-  }
 
   if (route === 'customer') return <CustomerApp />;
 
