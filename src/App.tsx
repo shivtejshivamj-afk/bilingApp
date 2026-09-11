@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone, ShieldCheck } from 'lucide-react';
+import { Utensils, QrCode, ClipboardList, ArrowRight, Sparkles, Loader2, Eye, EyeOff, BarChart3, Bell, Smartphone, ShieldCheck, Lock } from 'lucide-react';
 import { getSlugFromPath, useResolveRestaurant, RestaurantProvider, signUpRestaurant, slugify } from '@/lib/restaurantContext';
 import { getCurrentUserId, onAuthChange, signOut, fetchRestaurantBySlug } from '@/lib/sync';
 import { useSettings } from '@/lib/useLocalData';
@@ -169,7 +169,12 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  if (route === 'customer') return <CustomerApp />;
+  if (route === 'customer') {
+    if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
+      return <OrderingUnavailable restaurantName={settings.restaurantName} />;
+    }
+    return <CustomerApp />;
+  }
 
   if (route === 'admin') {
     if (authState === 'checking') {
@@ -197,6 +202,9 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     }
     if (restaurant.status === 'rejected') {
       return <SignupRejected restaurantName={settings.restaurantName} onLogout={async () => { await signOut(); setAuthState('out'); }} />;
+    }
+    if (restaurant.status === 'suspended') {
+      return <ServiceSuspended restaurantName={settings.restaurantName} onLogout={async () => { await signOut(); setAuthState('out'); }} />;
     }
     return (
       <AdminDashboard
@@ -275,6 +283,37 @@ function SignupRejected({ restaurantName, onLogout }: { restaurantName: string; 
       <button onClick={onLogout} className="text-paprika-300 hover:text-paprika-200 font-medium underline underline-offset-4">
         Sign out
       </button>
+    </div>
+  );
+}
+
+function ServiceSuspended({ restaurantName, onLogout }: { restaurantName: string; onLogout: () => void }) {
+  return (
+    <div className="min-h-screen bg-ink-900 text-white flex flex-col items-center justify-center px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-paprika-500 flex items-center justify-center mb-6">
+        <Lock size={30} />
+      </div>
+      <h1 className="text-2xl font-display font-semibold mb-2">{restaurantName}'s service is paused</h1>
+      <p className="text-ink-400 max-w-sm mb-6">
+        Access to this dashboard has been temporarily suspended. If you believe this is a mistake, or need to settle your account, please contact the platform owner.
+      </p>
+      <button onClick={onLogout} className="text-paprika-300 hover:text-paprika-200 font-medium underline underline-offset-4">
+        Sign out
+      </button>
+    </div>
+  );
+}
+
+function OrderingUnavailable({ restaurantName }: { restaurantName: string }) {
+  return (
+    <div className="min-h-screen bg-parchment-100 flex flex-col items-center justify-center px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-ink-900 flex items-center justify-center mb-6">
+        <Utensils className="text-white" size={30} />
+      </div>
+      <h1 className="text-2xl font-display font-semibold text-ink-900 mb-2">{restaurantName}</h1>
+      <p className="text-ink-500 max-w-sm">
+        Online ordering isn't available right now. Please speak with staff directly, or try again later.
+      </p>
     </div>
   );
 }
