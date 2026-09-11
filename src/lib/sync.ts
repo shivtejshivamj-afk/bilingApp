@@ -25,6 +25,37 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+/** Establishes (or confirms) a real, if anonymous, session for a customer
+ * opening a restaurant's QR menu, and ties it to that specific restaurant
+ * via table_sessions. This is what lets the database itself enforce that a
+ * customer can only read that one restaurant's orders — see the migration
+ * this ships with for the full reasoning. Safe to call repeatedly; it's a
+ * no-op if a session for this restaurant already exists. */
+export async function ensureTableSession(restaurantId: string): Promise<void> {
+  let { data: sessionData } = await supabase.auth.getSession();
+
+  if (!sessionData.session) {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) {
+      // Anonymous sign-ins may not be enabled on this Supabase project yet
+      // — fail quietly here rather than blocking the customer from seeing
+      // the menu at all; order reads will just come back empty until this
+      // is enabled (see the setup note that ships with this feature).
+      console.error('Failed to start anonymous session:', error.message);
+      return;
+    }
+    ({ data: sessionData } = await supabase.auth.getSession());
+  }
+
+  const userId = sessionData.session?.user.id;
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from('table_sessions')
+    .upsert({ user_id: userId, restaurant_id: restaurantId, created_at: Date.now() });
+  if (error) console.error('Failed to establish table session:', error.message);
+}
+
 export async function requestPasswordReset(email: string, redirectTo: string): Promise<{ error?: string }> {
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) return { error: error.message };
