@@ -80,7 +80,7 @@ export async function claimRestaurant(restaurantId: string, ownerId: string): Pr
 // these via restaurant_id.
 // ---------------------------------------------------------------------------
 
-export type RestaurantStatus = 'pending' | 'approved' | 'rejected';
+export type RestaurantStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
 
 export interface RestaurantRecord {
   id: string;
