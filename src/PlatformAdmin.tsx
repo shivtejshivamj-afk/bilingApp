@@ -93,7 +93,7 @@ function PlatformAdminDashboard() {
     load();
   }, []);
 
-  const act = async (id: string, status: 'approved' | 'rejected') => {
+  const act = async (id: string, status: 'approved' | 'rejected' | 'suspended') => {
     setBusyId(id);
     try {
       await setRestaurantStatus(id, status);
@@ -200,7 +200,11 @@ function PlatformAdminDashboard() {
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      r.status === 'approved' ? 'bg-basil-100 text-basil-700' : 'bg-paprika-100 text-paprika-700'
+                      r.status === 'approved'
+                        ? 'bg-basil-100 text-basil-700'
+                        : r.status === 'suspended'
+                        ? 'bg-ink-200 text-ink-600'
+                        : 'bg-paprika-100 text-paprika-700'
                     }`}
                   >
                     {r.status}
@@ -217,12 +221,22 @@ function PlatformAdminDashboard() {
                   )}
                   {r.status === 'approved' && (
                     <button
-                      onClick={() => act(r.id, 'rejected')}
+                      onClick={() => act(r.id, 'suspended')}
                       disabled={busyId === r.id}
-                      className="px-2.5 py-1.5 rounded-lg bg-paprika-50 text-paprika-600 text-xs font-semibold hover:bg-paprika-100 transition flex items-center gap-1 disabled:opacity-40"
-                      title="Reject this restaurant"
+                      className="px-2.5 py-1.5 rounded-lg bg-ink-100 text-ink-600 text-xs font-semibold hover:bg-ink-200 transition flex items-center gap-1 disabled:opacity-40"
+                      title="Suspend this restaurant (e.g. payment not received) — blocks their dashboard and customer ordering without deleting anything"
                     >
-                      <X size={13} /> Reject
+                      <Lock size={13} /> Suspend
+                    </button>
+                  )}
+                  {r.status === 'suspended' && (
+                    <button
+                      onClick={() => act(r.id, 'approved')}
+                      disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
+                      title="Reactivate this restaurant"
+                    >
+                      <RotateCcw size={13} /> Reactivate
                     </button>
                   )}
                   <button
