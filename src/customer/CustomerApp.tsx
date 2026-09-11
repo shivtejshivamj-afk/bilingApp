@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { MenuItem, Order, OrderItem, OrderItemStatus } from '@/types';
 import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
-import { fetchOrders, insertOrder, subscribeToOrderEvents } from '@/lib/sync';
+import { fetchOrders, insertOrder, subscribeToOrderEvents, ensureTableSession } from '@/lib/sync';
 import { useRestaurantId } from '@/lib/restaurantContext';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
 
@@ -99,9 +99,23 @@ export default function CustomerApp() {
     showToast('Ready for a new order!');
   }, [tableNumber]);
 
+  // Establishes this device's (anonymous) session and ties it to this
+  // restaurant — required before any order read/write will succeed, now
+  // that those are properly scoped per restaurant at the database level
+  // rather than trusted to the app alone. Runs once, before the order
+  // fetch/subscribe effects below, which wait on it.
+  const [sessionReady, setSessionReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    ensureTableSession(restaurantId).finally(() => {
+      if (!cancelled) setSessionReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [restaurantId]);
+
   // Load my orders for this table from Supabase
   useEffect(() => {
-    if (tableNumber == null) return;
+    if (tableNumber == null || !sessionReady) return;
     let cancelled = false;
     (async () => {
       try {
@@ -114,11 +128,11 @@ export default function CustomerApp() {
       }
     })();
     return () => { cancelled = true; };
-  }, [restaurantId, tableNumber]);
+  }, [restaurantId, tableNumber, sessionReady]);
 
   // Listen for realtime status updates
   useEffect(() => {
-    if (tableNumber == null) return;
+    if (tableNumber == null || !sessionReady) return;
     return subscribeToOrderEvents(restaurantId, (event) => {
       if (event.type === 'DELETE') {
         setMyOrders((prev) => prev.filter((o) => o.id !== event.orderId));
@@ -141,7 +155,7 @@ export default function CustomerApp() {
         });
       }
     });
-  }, [restaurantId, tableNumber]);
+  }, [restaurantId, tableNumber, sessionReady]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
