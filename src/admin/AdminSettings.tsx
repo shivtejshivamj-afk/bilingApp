@@ -258,7 +258,7 @@ export default function AdminSettings() {
           Questions about billing, your account, or something not working right? We're here to help.
         </p>
         <a
-          href="/_support"
+          href={`/_support?from=${currentSlug}&admin=1`}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 transition-colors"
         >
           Visit Support &amp; FAQ
