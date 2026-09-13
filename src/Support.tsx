@@ -5,6 +5,20 @@ import { Utensils, Mail, MessageCircle, ChevronDown, ArrowLeft } from 'lucide-re
 const SUPPORT_EMAIL = 'shivtejtech@gmail.com';
 const SUPPORT_WHATSAPP = 'https://wa.me/917208789589';
 
+// Figures out where "back" should actually go. Support is a shared,
+// restaurant-independent page (yoursite.com/_support), so on its own it
+// has no idea which restaurant you came from — the links that bring
+// people here pass that along as a query param so this page can send you
+// back to the right place instead of always dumping you on the generic
+// platform landing page.
+function getBackDestination(): { url: string; label: string } {
+  const params = new URLSearchParams(window.location.search);
+  const from = params.get('from');
+  if (!from) return { url: '/', label: 'Back home' };
+  if (params.get('admin') === '1') return { url: `/${from}#admin`, label: 'Back to dashboard' };
+  return { url: `/${from}`, label: 'Back to restaurant' };
+}
+
 const FAQS = [
   {
     q: 'How does the QR ordering work?',
@@ -41,18 +55,19 @@ const FAQS = [
 ];
 
 export default function Support() {
+  const back = getBackDestination();
   return (
     <div className="min-h-screen bg-parchment-100">
       <header className="bg-ink-900 text-white px-6 py-5">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+          <a href={back.url} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-lg bg-paprika-500 flex items-center justify-center">
               <Utensils size={16} className="text-white" />
             </div>
             <span className="font-display font-semibold">ScannBite</span>
           </a>
-          <a href="/" className="flex items-center gap-1.5 text-sm text-ink-300 hover:text-white transition-colors">
-            <ArrowLeft size={15} /> Back home
+          <a href={back.url} className="flex items-center gap-1.5 text-sm text-ink-300 hover:text-white transition-colors">
+            <ArrowLeft size={15} /> {back.label}
           </a>
         </div>
       </header>
