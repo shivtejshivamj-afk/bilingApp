@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Save, Trash2, Wallet, Link2, Check, AlertCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Trash2, Wallet, Link2, Check, AlertCircle, LifeBuoy } from 'lucide-react';
 import { useSettings, useSales } from '@/lib/useLocalData';
 import { clearRestaurantLocalData } from '@/lib/storage';
 import { resetRestaurantData, changeRestaurantSlug, deleteRestaurant, signOut } from '@/lib/sync';
@@ -246,6 +246,23 @@ export default function AdminSettings() {
           Today's Sales
         </h3>
         <SalesSummary currency={settings.currency} />
+      </div>
+
+      {/* Support */}
+      <div className="bg-white rounded-2xl border border-ink-200 p-5">
+        <h3 className="font-semibold text-ink-900 flex items-center gap-2 mb-1">
+          <LifeBuoy size={18} />
+          Support &amp; Help
+        </h3>
+        <p className="text-sm text-ink-400 mb-3">
+          Questions about billing, your account, or something not working right? We're here to help.
+        </p>
+        <a
+          href="/_support"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 transition-colors"
+        >
+          Visit Support &amp; FAQ
+        </a>
       </div>
 
       {/* Danger zone */}
