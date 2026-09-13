@@ -8,6 +8,7 @@ import AdminLogin, { SetNewPassword } from '@/admin/AdminLogin';
 import AdminDashboard from '@/admin/AdminDashboard';
 import CustomerApp from '@/customer/CustomerApp';
 import PlatformAdmin from './PlatformAdmin';
+import Support from './Support';
 
 function isCustomerRoute(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -27,6 +28,7 @@ function isPasswordRecoveryUrl(): boolean {
 // Reserved — not available as a restaurant's own URL, since it's where you
 // (the platform owner) go to approve or reject new restaurant signups.
 const PLATFORM_ADMIN_SLUG = '_platform';
+const SUPPORT_SLUG = '_support';
 
 export default function App() {
   const slug = getSlugFromPath();
@@ -39,6 +41,7 @@ export default function App() {
   }
 
   if (slug === PLATFORM_ADMIN_SLUG) return <PlatformAdmin />;
+  if (slug === SUPPORT_SLUG) return <Support />;
 
   // No slug in the URL at all -> this is the platform's own landing page,
   // where a new restaurant can sign up.
@@ -248,6 +251,9 @@ function RestaurantLanding({ onEnterAdmin }: { onEnterAdmin: () => void }) {
           <FeatureCard icon={QrCode} title="QR Table Codes" desc="Generate printable QR codes per table." />
           <FeatureCard icon={Sparkles} title="Live Reports" desc="Interactive revenue charts, always up to date." />
         </div>
+        <p className="text-center text-ink-500 text-xs mt-8">
+          <a href="/_support" className="hover:text-white transition-colors underline underline-offset-2">Need help? Visit Support &amp; FAQ</a>
+        </p>
       </div>
     </div>
   );
@@ -370,7 +376,7 @@ function PlatformLanding() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !effectiveSlug || !email.trim() || !password) return;
-    if (effectiveSlug === PLATFORM_ADMIN_SLUG) {
+    if (effectiveSlug === PLATFORM_ADMIN_SLUG || effectiveSlug === SUPPORT_SLUG) {
       setError('That URL is reserved — please choose a different one.');
       return;
     }
@@ -584,7 +590,10 @@ function PlatformLanding() {
             </div>
             <span className="font-display font-semibold text-sm">ScannBite</span>
           </div>
-          <p className="text-ink-500 text-xs">QR ordering &amp; billing for restaurants, big or small.</p>
+          <div className="flex items-center gap-5 text-xs text-ink-500">
+            <a href="/_support" className="hover:text-white transition-colors">Support &amp; FAQ</a>
+            <span>QR ordering &amp; billing for restaurants, big or small.</span>
+          </div>
         </div>
       </footer>
     </div>
