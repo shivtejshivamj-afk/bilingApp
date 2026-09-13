@@ -252,7 +252,7 @@ function RestaurantLanding({ onEnterAdmin }: { onEnterAdmin: () => void }) {
           <FeatureCard icon={Sparkles} title="Live Reports" desc="Interactive revenue charts, always up to date." />
         </div>
         <p className="text-center text-ink-500 text-xs mt-8">
-          <a href="/_support" className="hover:text-white transition-colors underline underline-offset-2">Need help? Visit Support &amp; FAQ</a>
+          <a href={`/_support?from=${getSlugFromPath()}`} className="hover:text-white transition-colors underline underline-offset-2">Need help? Visit Support &amp; FAQ</a>
         </p>
       </div>
     </div>
