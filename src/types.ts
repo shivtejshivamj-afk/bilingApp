@@ -10,6 +10,7 @@ export interface MenuItem {
   category: Category;
   image: string;
   available: boolean;
+  isVeg: boolean;
 }
 
 export type OrderItemStatus = 'Pending' | 'Cooking' | 'Served';
