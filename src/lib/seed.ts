@@ -9,6 +9,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Starters',
     image: 'https://images.pexels.com/photos/2532006/pexels-photo-2532006.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: true,
   },
   {
     id: 's2',
@@ -18,6 +19,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Starters',
     image: 'https://images.pexels.com/photos/19938473/pexels-photo-19938473.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: false,
   },
   {
     id: 'm1',
@@ -27,6 +29,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Mains',
     image: 'https://images.pexels.com/photos/17095325/pexels-photo-17095325.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: false,
   },
   {
     id: 'm2',
@@ -36,6 +39,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Mains',
     image: 'https://images.pexels.com/photos/546945/pexels-photo-546945.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: false,
   },
   {
     id: 'm3',
@@ -45,6 +49,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Mains',
     image: 'https://images.pexels.com/photos/28292008/pexels-photo-28292008.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: false,
   },
   {
     id: 'd1',
@@ -54,6 +59,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Drinks',
     image: 'https://images.pexels.com/photos/7985176/pexels-photo-7985176.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: true,
   },
   {
     id: 'd2',
@@ -63,6 +69,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Drinks',
     image: 'https://images.pexels.com/photos/35229818/pexels-photo-35229818.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: true,
   },
   {
     id: 'ds1',
@@ -72,6 +79,7 @@ export const SEED_MENU: MenuItem[] = [
     category: 'Desserts',
     image: 'https://images.pexels.com/photos/10249461/pexels-photo-10249461.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
     available: true,
+    isVeg: true,
   },
 ];
 
