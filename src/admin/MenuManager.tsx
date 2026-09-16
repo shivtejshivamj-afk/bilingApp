@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, X, Tag, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, X, Tag, Check, Leaf, Drumstick } from 'lucide-react';
 import type { MenuItem } from '@/types';
 import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
 import { formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
+import { VegIndicator } from '@/components/VegIndicator';
 
 const blankItem = (): Omit<MenuItem, 'id'> => ({
   name: '',
@@ -12,6 +13,7 @@ const blankItem = (): Omit<MenuItem, 'id'> => ({
   category: '',
   image: '',
   available: true,
+  isVeg: true,
 });
 
 export default function MenuManager() {
@@ -20,6 +22,7 @@ export default function MenuManager() {
   const { categories, setCategories } = useCategories();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<string | 'All'>('All');
+  const [filterVeg, setFilterVeg] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -32,10 +35,11 @@ export default function MenuManager() {
   const filtered = useMemo(() => {
     return menu.filter((m) => {
       const matchCat = filterCat === 'All' || m.category === filterCat;
+      const matchVeg = filterVeg === 'All' || (filterVeg === 'Veg' ? m.isVeg : !m.isVeg);
       const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      return matchCat && matchVeg && matchSearch;
     });
-  }, [menu, search, filterCat]);
+  }, [menu, search, filterCat, filterVeg]);
 
   const openCreate = () => {
     setDraft(blankItem());
@@ -44,7 +48,7 @@ export default function MenuManager() {
 
   const openEdit = (item: MenuItem) => {
     setEditing(item);
-    setDraft({ name: item.name, description: item.description, price: item.price, category: item.category, image: item.image, available: item.available });
+    setDraft({ name: item.name, description: item.description, price: item.price, category: item.category, image: item.image, available: item.available, isVeg: item.isVeg });
   };
 
   const saveEdit = () => {
@@ -188,6 +192,19 @@ export default function MenuManager() {
           />
         </div>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          {(['All', 'Veg', 'Non-Veg'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setFilterVeg(v)}
+              className={`px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition flex items-center gap-1.5 ${filterVeg === v ? 'bg-ink-900 text-white' : 'bg-white border border-ink-200 text-ink-600 hover:bg-ink-50'}`}
+            >
+              {v === 'Veg' && <Leaf size={14} />}
+              {v === 'Non-Veg' && <Drumstick size={14} />}
+              {v}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           {(['All', ...categories] as const).map((cat) => (
             <button
               key={cat}
@@ -219,7 +236,10 @@ export default function MenuManager() {
               </span>
             </div>
             <div className="p-3">
-              <h3 className="font-bold text-ink-900 text-sm leading-tight">{item.name}</h3>
+              <div className="flex items-start gap-1.5">
+                <VegIndicator isVeg={item.isVeg} size={15} />
+                <h3 className="font-bold text-ink-900 text-sm leading-tight flex-1">{item.name}</h3>
+              </div>
               <p className="text-xs text-ink-500 mt-1 line-clamp-2">{item.description}</p>
               <p className="font-bold text-ink-900 mt-2">{formatMoney(item.price, settings.currency)}</p>
               <div className="flex gap-1.5 mt-3">
@@ -386,6 +406,26 @@ function ItemForm({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-ink-700 mb-1.5">Type</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDraft({ ...draft, isVeg: true })}
+            className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 transition ${draft.isVeg ? 'bg-basil-50 border-basil-300 text-basil-700' : 'border-ink-200 text-ink-500 hover:bg-ink-50'}`}
+          >
+            <VegIndicator isVeg={true} size={14} /> Veg
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraft({ ...draft, isVeg: false })}
+            className={`flex-1 py-2.5 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 transition ${!draft.isVeg ? 'bg-paprika-50 border-paprika-300 text-paprika-700' : 'border-ink-200 text-ink-500 hover:bg-ink-50'}`}
+          >
+            <VegIndicator isVeg={false} size={14} /> Non-Veg
+          </button>
         </div>
       </div>
 
