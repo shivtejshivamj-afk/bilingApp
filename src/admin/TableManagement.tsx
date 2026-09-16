@@ -247,6 +247,11 @@ function BillReceipt({
     }, 300);
     onPay();
   };
+
+  const markDone = () => {
+    onPay();
+  };
+
   return (
     <div>
       <div id="printable-receipt" className="bg-white border border-parchment-300 rounded-t-xl shadow-ticket p-4 font-mono text-sm relative">
@@ -279,13 +284,23 @@ function BillReceipt({
         <p className="text-center text-xs text-ink-400 mt-3">Thank you for dining with us!</p>
       </div>
       <div className="ticket-edge text-parchment-100 bg-white h-2.5 -mt-px rounded-b-xl" />
-      <button
-        onClick={print}
-        className="w-full mt-4 py-3.5 rounded-xl bg-basil-500 hover:bg-basil-600 text-white font-bold flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg"
-      >
-        <Printer size={18} />
-        Generate Bill & Print Receipt
-      </button>
+      <p className="text-center text-xs text-ink-400 mt-4 mb-2">Table settled — choose how to finish up</p>
+      <div className="flex gap-2.5">
+        <button
+          onClick={print}
+          className="flex-1 py-3.5 rounded-xl bg-basil-500 hover:bg-basil-600 text-white font-bold flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg"
+        >
+          <Printer size={18} />
+          Print Bill
+        </button>
+        <button
+          onClick={markDone}
+          className="flex-1 py-3.5 rounded-xl border-2 border-ink-200 text-ink-700 font-bold flex items-center justify-center gap-2 transition-all hover:bg-ink-50 hover:-translate-y-0.5 active:translate-y-0"
+        >
+          <CheckCircle2 size={18} />
+          Order Done
+        </button>
+      </div>
     </div>
   );
 }
