@@ -18,6 +18,7 @@ import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
 import { fetchOrders, insertOrder, subscribeToOrderEvents, ensureTableSession } from '@/lib/sync';
 import { useRestaurantId } from '@/lib/restaurantContext';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
+import { VegIndicator } from '@/components/VegIndicator';
 
 interface CartLine {
   menuItemId: string;
@@ -69,6 +70,7 @@ export default function CustomerApp() {
   const tableNumber = useMemo(() => getTableFromUrl(), []);
 
   const [activeCategory, setActiveCategory] = useState<string | 'All'>('All');
+  const [vegFilter, setVegFilter] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -167,13 +169,14 @@ export default function CustomerApp() {
   const filtered = useMemo(() => {
     return availableMenu.filter((m) => {
       const matchCat = activeCategory === 'All' || m.category === activeCategory;
+      const matchVeg = vegFilter === 'All' || (vegFilter === 'Veg' ? m.isVeg : !m.isVeg);
       const matchSearch =
         !search ||
         m.name.toLowerCase().includes(search.toLowerCase()) ||
         m.description.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      return matchCat && matchVeg && matchSearch;
     });
-  }, [availableMenu, activeCategory, search]);
+  }, [availableMenu, activeCategory, vegFilter, search]);
 
   const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
   const cartSubtotal = computeSubtotal(
@@ -352,6 +355,25 @@ export default function CustomerApp() {
             />
           </div>
         </div>
+        {/* Veg / Non-Veg filter */}
+        <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
+          {(['All', 'Veg', 'Non-Veg'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setVegFilter(v)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                vegFilter === v
+                  ? v === 'Non-Veg'
+                    ? 'bg-paprika-500 text-white shadow-md'
+                    : 'bg-basil-500 text-white shadow-md'
+                  : 'bg-white text-ink-600 hover:bg-parchment-200 border border-parchment-300'
+              }`}
+            >
+              {v !== 'All' && <VegIndicator isVeg={v === 'Veg'} size={11} />}
+              {v}
+            </button>
+          ))}
+        </div>
         {/* Category pills */}
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
           {(['All', ...categories] as const).map((cat) => (
@@ -496,7 +518,10 @@ function MenuCard({ item, onAdd, currency }: { item: MenuItem; onAdd: () => void
       <img src={item.image} alt={item.name} className="w-28 h-28 object-cover shrink-0 bg-parchment-200" loading="lazy" />
       <div className="flex-1 p-3 flex flex-col">
         <div className="flex-1">
-          <h3 className="font-bold font-display text-ink-900 leading-tight">{item.name}</h3>
+          <div className="flex items-start gap-1.5">
+            <VegIndicator isVeg={item.isVeg} size={13} />
+            <h3 className="font-bold font-display text-ink-900 leading-tight flex-1">{item.name}</h3>
+          </div>
           <p className="text-xs text-ink-500 mt-1 line-clamp-2">{item.description}</p>
         </div>
         <div className="flex items-center justify-between mt-2">
