@@ -361,6 +361,7 @@ function rowToMenuItem(row: any): MenuItem {
     category: row.category,
     image: row.image,
     available: row.available,
+    isVeg: row.is_veg ?? true,
   };
 }
 
@@ -374,6 +375,7 @@ function menuItemToRow(restaurantId: string, item: MenuItem) {
     category: item.category,
     image: item.image,
     available: item.available,
+    is_veg: item.isVeg,
   };
 }
 
