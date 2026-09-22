@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Plus, Minus, X, Search, ShoppingBag, Send, UtensilsCrossed } from 'lucide-react';
+import { Plus, Minus, X, Search, ShoppingBag, Send } from 'lucide-react';
 import type { MenuItem, Order, OrderItem, OrderItemStatus } from '@/types';
 import { useCategories, useMenu, useOrders, useSettings } from '@/lib/useLocalData';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
+import { MenuItemImage } from '@/components/MenuItemImage';
 import { Modal } from '@/components/ui';
 
 interface CartLine {
@@ -184,13 +185,7 @@ export default function ManualOrderModal({
                 }`}
               >
                 <div className="h-20 bg-ink-100">
-                  {item.image ? (
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-ink-300">
-                      <UtensilsCrossed size={20} />
-                    </div>
-                  )}
+                  <MenuItemImage image={item.image} name={item.name} category={item.category} className="w-full h-full" />
                 </div>
                 <div className="p-2">
                   <p className="font-semibold text-ink-900 text-xs leading-tight line-clamp-2">{item.name}</p>
