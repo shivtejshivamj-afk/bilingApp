@@ -5,6 +5,7 @@ import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
 import { formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
 import { VegIndicator } from '@/components/VegIndicator';
+import { MenuItemImage } from '@/components/MenuItemImage';
 
 const blankItem = (): Omit<MenuItem, 'id'> => ({
   name: '',
@@ -221,11 +222,7 @@ export default function MenuManager() {
         {filtered.map((item) => (
           <div key={item.id} className="bg-white rounded-2xl border border-ink-200 shadow-sm overflow-hidden group">
             <div className="relative h-36 bg-ink-100">
-              {item.image ? (
-                <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-ink-300 text-xs">No image</div>
-              )}
+              <MenuItemImage image={item.image} name={item.name} category={item.category} className="w-full h-full" />
               {!item.available && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <span className="px-3 py-1 rounded-full bg-white text-ink-900 text-xs font-bold">Unavailable</span>
