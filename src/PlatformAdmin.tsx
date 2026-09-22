@@ -1,40 +1,62 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
-import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, type RestaurantRecord } from '@/lib/sync';
+import { ShieldCheck, Lock, Mail, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, isPlatformAdmin, signIn, signOut, type RestaurantRecord } from '@/lib/sync';
 
-// Gates this panel client-side, the same trade-off already used for the
-// legacy PIN system elsewhere in this app — set VITE_PLATFORM_ADMIN_PASSWORD
-// in Vercel's environment variables so it's not baked into the source code.
-// Falls back to a default only so the panel isn't completely inaccessible
-// if that variable was never set — change it immediately if you're relying
-// on the fallback.
-const PLATFORM_PASSWORD = import.meta.env.VITE_PLATFORM_ADMIN_PASSWORD || 'changeme';
+// Real, database-enforced auth: sign in with a normal Supabase Auth
+// account, then the `platform_admins` table (checked both here and, more
+// importantly, inside every platform-admin database function) decides
+// whether that account can actually do anything. See
+// 20260922000000_platform_admin_auth.sql for how to add an admin — there
+// is no password stored in this app anymore.
+
+type GateState = 'checking' | 'signed-out' | 'not-admin' | 'admin';
 
 export default function PlatformAdmin() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('rbs_platform_admin_auth') === '1');
+  const [state, setState] = useState<GateState>('checking');
 
-  if (!authed) {
-    return <PlatformAdminGate onSuccess={() => {
-      sessionStorage.setItem('rbs_platform_admin_auth', '1');
-      setAuthed(true);
-    }} />;
+  const recheck = async () => {
+    const admin = await isPlatformAdmin();
+    setState(admin ? 'admin' : 'signed-out');
+  };
+
+  useEffect(() => {
+    recheck();
+  }, []);
+
+  if (state === 'checking') {
+    return <div className="min-h-screen bg-ink-900" />;
   }
-  return <PlatformAdminDashboard />;
+  if (state === 'admin') {
+    return <PlatformAdminDashboard onSignOut={async () => { await signOut(); setState('signed-out'); }} />;
+  }
+  return (
+    <PlatformAdminGate
+      notAdmin={state === 'not-admin'}
+      onSignedIn={async () => {
+        const admin = await isPlatformAdmin();
+        setState(admin ? 'admin' : 'not-admin');
+      }}
+    />
+  );
 }
 
-function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
+function PlatformAdminGate({ notAdmin, onSignedIn }: { notAdmin: boolean; onSignedIn: () => void }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === PLATFORM_PASSWORD) {
-      onSuccess();
-    } else {
-      setError(true);
-      setPassword('');
-      setTimeout(() => setError(false), 600);
+    setSubmitting(true);
+    setError(null);
+    const result = await signIn(email, password);
+    setSubmitting(false);
+    if ('error' in result) {
+      setError(result.error);
+      return;
     }
+    onSignedIn();
   };
 
   return (
@@ -46,24 +68,45 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
           </div>
           <h1 className="text-2xl font-display font-semibold text-white">Platform Admin</h1>
         </div>
-        <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700">
-          <label className="block text-sm font-medium text-ink-300 mb-2">Admin Password</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              className={`w-full pl-10 pr-3 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400 transition ${error ? 'ring-2 ring-paprika-500 animate-[shake_0.4s]' : ''}`}
-            />
+        <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700 space-y-4">
+          {notAdmin && (
+            <p className="text-saffron-300 text-sm">
+              Signed in, but that account isn't a platform admin. Sign in with the account that's listed in the
+              platform_admins table.
+            </p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-ink-300 mb-2">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                className="w-full pl-10 pr-3 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400 transition"
+              />
+            </div>
           </div>
-          {error && <p className="text-paprika-300 text-sm mt-2">Incorrect password.</p>}
+          <div>
+            <label className="block text-sm font-medium text-ink-300 mb-2">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`w-full pl-10 pr-3 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400 transition ${error ? 'ring-2 ring-paprika-500 animate-[shake_0.4s]' : ''}`}
+              />
+            </div>
+          </div>
+          {error && <p className="text-paprika-300 text-sm">{error}</p>}
           <button
             type="submit"
-            className="w-full mt-5 py-3.5 rounded-xl bg-basil-500 text-white font-bold hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md hover:shadow-lg"
+            disabled={submitting}
+            className="w-full py-3.5 rounded-xl bg-basil-500 text-white font-bold hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
           >
-            Enter
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
@@ -71,7 +114,7 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function PlatformAdminDashboard() {
+function PlatformAdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [restaurants, setRestaurants] = useState<RestaurantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -132,13 +175,21 @@ function PlatformAdminDashboard() {
             </div>
             <h1 className="font-display font-semibold text-lg">Platform Admin</h1>
           </div>
-          <button
-            onClick={load}
-            className="p-2 rounded-lg hover:bg-ink-800 text-ink-300 hover:text-white transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={load}
+              className="p-2 rounded-lg hover:bg-ink-800 text-ink-300 hover:text-white transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={onSignOut}
+              className="px-3 py-2 rounded-lg hover:bg-ink-800 text-ink-300 hover:text-white transition-colors text-sm font-medium"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
