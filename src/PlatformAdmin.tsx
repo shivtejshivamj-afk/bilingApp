@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck, Lock, Mail, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
-import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, isPlatformAdmin, signIn, signOut, type RestaurantRecord } from '@/lib/sync';
+import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, isPlatformAdmin, signIn, signUp, signOut, type RestaurantRecord } from '@/lib/sync';
 
 // Real, database-enforced auth: sign in with a normal Supabase Auth
 // account, then the `platform_admins` table (checked both here and, more
@@ -41,15 +41,43 @@ export default function PlatformAdmin() {
 }
 
 function PlatformAdminGate({ notAdmin, onSignedIn }: { notAdmin: boolean; onSignedIn: () => void }) {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setInfo(null);
+
+    if (mode === 'signup') {
+      const result = await signUp(email, password);
+      setSubmitting(false);
+      if ('error' in result) {
+        setError(result.error);
+        return;
+      }
+      // If email confirmation is turned on for this Supabase project, this
+      // account has no session yet — it can't sign in until confirmed. If
+      // it's turned off, signUp already leaves the user signed in.
+      const admin = await isPlatformAdmin();
+      if (!admin) {
+        setInfo(
+          'Account created. Copy this account\'s ID from Supabase → Authentication → Users, then run the ' +
+          'platform_admins insert for it (see the migration notes). If your project requires email confirmation, ' +
+          'confirm the email first, then come back and sign in.'
+        );
+        setMode('signin');
+        return;
+      }
+      onSignedIn();
+      return;
+    }
+
     const result = await signIn(email, password);
     setSubmitting(false);
     if ('error' in result) {
@@ -71,10 +99,11 @@ function PlatformAdminGate({ notAdmin, onSignedIn }: { notAdmin: boolean; onSign
         <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700 space-y-4">
           {notAdmin && (
             <p className="text-saffron-300 text-sm">
-              Signed in, but that account isn't a platform admin. Sign in with the account that's listed in the
-              platform_admins table.
+              Signed in, but that account isn't a platform admin yet. Add its ID to the platform_admins table, then
+              sign in again.
             </p>
           )}
+          {info && <p className="text-basil-300 text-sm">{info}</p>}
           <div>
             <label className="block text-sm font-medium text-ink-300 mb-2">Email</label>
             <div className="relative">
@@ -106,7 +135,18 @@ function PlatformAdminGate({ notAdmin, onSignedIn }: { notAdmin: boolean; onSign
             disabled={submitting}
             className="w-full py-3.5 rounded-xl bg-basil-500 text-white font-bold hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? (mode === 'signup' ? 'Creating account…' : 'Signing in…') : mode === 'signup' ? 'Create account' : 'Sign in'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === 'signin' ? 'signup' : 'signin');
+              setError(null);
+              setInfo(null);
+            }}
+            className="w-full text-center text-sm text-ink-400 hover:text-white transition-colors"
+          >
+            {mode === 'signin' ? "Don't have an account yet? Create one" : 'Already have an account? Sign in'}
           </button>
         </form>
       </div>
