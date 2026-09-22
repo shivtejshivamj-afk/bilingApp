@@ -19,6 +19,7 @@ import { fetchOrders, insertOrder, subscribeToOrderEvents, ensureTableSession } 
 import { useRestaurantId } from '@/lib/restaurantContext';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
 import { VegIndicator } from '@/components/VegIndicator';
+import { MenuItemImage } from '@/components/MenuItemImage';
 
 interface CartLine {
   menuItemId: string;
@@ -515,7 +516,7 @@ export default function CustomerApp() {
 function MenuCard({ item, onAdd, currency }: { item: MenuItem; onAdd: () => void; currency: string }) {
   return (
     <div className="flex gap-3 bg-white rounded-2xl overflow-hidden shadow-sm border border-parchment-300 hover:shadow-md transition-shadow">
-      <img src={item.image} alt={item.name} className="w-28 h-28 object-cover shrink-0 bg-parchment-200" loading="lazy" />
+      <MenuItemImage image={item.image} name={item.name} category={item.category} className="w-28 h-28 shrink-0" />
       <div className="flex-1 p-3 flex flex-col">
         <div className="flex-1">
           <div className="flex items-start gap-1.5">
