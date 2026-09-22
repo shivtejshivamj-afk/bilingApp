@@ -169,14 +169,26 @@ export async function createRestaurant(slug: string, name: string, ownerId: stri
 }
 
 // ---------------------------------------------------------------------------
-// Platform admin — approving/rejecting new restaurant signups. Gated by a
-// password screen client-side (see PlatformAdmin.tsx), not a real separate
-// login system — see the migration this ships with for the security
-// trade-off that implies.
+// Platform admin — approving/rejecting new restaurant signups. Requires a
+// real, signed-in Supabase Auth account listed in the `platform_admins`
+// table (see the 20260922000000_platform_admin_auth.sql migration). Every
+// function below is enforced by the database itself, not just the UI.
 // ---------------------------------------------------------------------------
 
+export async function isPlatformAdmin(): Promise<boolean> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return false;
+  const { data, error } = await supabase
+    .from('platform_admins')
+    .select('user_id')
+    .eq('user_id', sessionData.session.user.id)
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
+}
+
 export async function fetchAllRestaurants(): Promise<RestaurantRecord[]> {
-  const { data, error } = await supabase.from('restaurants').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('platform_list_restaurants');
   if (error) throw error;
   return (data ?? []).map(rowToRestaurant);
 }
@@ -431,7 +443,7 @@ export async function resetRestaurantData(restaurantId: string): Promise<void> {
  * delete automatically via the database's foreign key setup. There is no
  * undo. */
 export async function deleteRestaurant(restaurantId: string): Promise<void> {
-  const { error } = await supabase.from('restaurants').delete().eq('id', restaurantId);
+  const { error } = await supabase.rpc('platform_delete_restaurant', { target_id: restaurantId });
   if (error) throw error;
 }
 
