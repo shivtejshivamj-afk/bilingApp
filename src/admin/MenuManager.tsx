@@ -6,6 +6,7 @@ import { formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
 import { VegIndicator } from '@/components/VegIndicator';
 import { MenuItemImage } from '@/components/MenuItemImage';
+import { compressImage } from '@/lib/imageCompress';
 
 const blankItem = (): Omit<MenuItem, 'id'> => ({
   name: '',
@@ -74,12 +75,23 @@ export default function MenuManager() {
     setDeleteId(null);
   };
 
-  const onImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [compressingImage, setCompressingImage] = useState(false);
+
+  const onImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setDraft((d) => ({ ...d, image: reader.result as string }));
-    reader.readAsDataURL(file);
+    setImageError(null);
+    setCompressingImage(true);
+    try {
+      const compressed = await compressImage(file);
+      setDraft((d) => ({ ...d, image: compressed }));
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Could not process this image.');
+    } finally {
+      setCompressingImage(false);
+    }
   };
 
   const isFormValid = draft.name.trim() && draft.price >= 0 && draft.category.trim() !== '';
@@ -280,6 +292,8 @@ export default function MenuManager() {
           currency={settings.currency}
           categories={categories}
           onImageUpload={onImageUpload}
+          imageError={imageError}
+          compressingImage={compressingImage}
           onCancel={() => {
             setEditing(null);
             setCreating(false);
@@ -308,6 +322,8 @@ function ItemForm({
   currency,
   categories,
   onImageUpload,
+  imageError,
+  compressingImage,
   onCancel,
   onSave,
   valid,
@@ -317,6 +333,8 @@ function ItemForm({
   currency: string;
   categories: string[];
   onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  imageError: string | null;
+  compressingImage: boolean;
   onCancel: () => void;
   onSave: () => void;
   valid: boolean;
@@ -337,9 +355,9 @@ function ItemForm({
           <label className="flex-1 cursor-pointer">
             <span className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-ink-300 text-sm font-medium text-ink-600 hover:border-ink-400 hover:bg-ink-50 transition">
               <Upload size={16} />
-              Upload Image
+              {compressingImage ? 'Processing…' : 'Upload Image'}
             </span>
-            <input type="file" accept="image/*" className="hidden" onChange={onImageUpload} />
+            <input type="file" accept="image/*" className="hidden" onChange={onImageUpload} disabled={compressingImage} />
           </label>
           {draft.image && (
             <button
@@ -350,6 +368,7 @@ function ItemForm({
             </button>
           )}
         </div>
+        {imageError && <p className="text-xs text-paprika-600 mt-1.5">{imageError}</p>}
         <input
           type="text"
           value={draft.image.startsWith('data:') ? '' : draft.image}
