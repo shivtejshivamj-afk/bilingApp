@@ -17,13 +17,14 @@ import {
 import { useSales, useSettings } from '@/lib/useLocalData';
 import { formatMoney } from '@/lib/billing';
 
-type RangeKey = 'today' | '7d' | '30d' | 'all';
+type RangeKey = 'today' | '7d' | '30d' | 'all' | 'custom';
 
 const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: 'today', label: 'Today' },
   { key: '7d', label: 'Last 7 days' },
   { key: '30d', label: 'Last 30 days' },
   { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom' },
 ];
 
 const PIE_COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#14b8a6'];
@@ -42,15 +43,41 @@ function rangeStart(range: RangeKey): number {
   return 0;
 }
 
+// Native <input type="date"> gives/takes "YYYY-MM-DD" strings — these two
+// helpers convert that to/from a local-midnight timestamp.
+function toDateInputValue(ts: number): string {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDateInput(value: string): number {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1).getTime();
+}
+
 export default function Reports() {
   const { sales } = useSales();
   const { settings } = useSettings();
   const [range, setRange] = useState<RangeKey>('7d');
+  const [customStart, setCustomStart] = useState(() => toDateInputValue(Date.now()));
+  const [customEnd, setCustomEnd] = useState(() => toDateInputValue(Date.now()));
 
-  const filtered = useMemo(() => {
-    const start = rangeStart(range);
-    return sales.filter((s) => s.paidAt >= start);
-  }, [sales, range]);
+  // The window of time actually being reported on. For custom, "end" runs
+  // to the end of the selected end day (not just its midnight), so picking
+  // the same day for start and end still includes that whole day's sales.
+  const { start, end } = useMemo(() => {
+    if (range === 'custom') {
+      const s = parseDateInput(customStart);
+      const e = parseDateInput(customEnd) + 86400000;
+      return { start: Math.min(s, e), end: Math.max(s, e) };
+    }
+    return { start: rangeStart(range), end: Date.now() + 1 };
+  }, [range, customStart, customEnd]);
+
+  const filtered = useMemo(() => sales.filter((s) => s.paidAt >= start && s.paidAt < end), [sales, start, end]);
 
   const totals = useMemo(() => {
     const revenue = filtered.reduce((sum, s) => sum + s.total, 0);
@@ -63,29 +90,26 @@ export default function Reports() {
     return { revenue, bills, avg, itemsSold };
   }, [filtered]);
 
-  // Revenue grouped by day, for the trend chart. For "Today" we still show
-  // a single-day bucket so the chart doesn't look empty.
+  // Revenue grouped by day, for the trend chart. For "Today", pull in a
+  // little extra history (last 7 days) purely for chart context, so a
+  // single-day selection doesn't look like an empty chart with one dot.
   const dailySeries = useMemo(() => {
-    const map = new Map<string, number>();
-    const start = rangeStart(range === 'today' ? '7d' : range); // give a little more context for very short ranges
-    const effectiveSales = range === 'today' ? filtered : sales.filter((s) => s.paidAt >= start);
+    const contextStart = range === 'today' ? rangeStart('7d') : start;
+    const source = sales.filter((s) => s.paidAt >= contextStart && s.paidAt < end);
 
-    effectiveSales.forEach((s) => {
-      const day = new Date(startOfDay(s.paidAt));
-      const key = day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      map.set(key, (map.get(key) ?? 0) + s.total);
+    const map = new Map<number, number>();
+    source.forEach((s) => {
+      const day = startOfDay(s.paidAt);
+      map.set(day, (map.get(day) ?? 0) + s.total);
     });
 
-    // Ensure chronological order by re-deriving from sorted unique day starts
-    const dayStarts = Array.from(
-      new Set(effectiveSales.map((s) => startOfDay(s.paidAt)))
-    ).sort((a, b) => a - b);
-
-    return dayStarts.map((d) => {
-      const key = new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      return { day: key, revenue: Math.round((map.get(key) ?? 0) * 100) / 100 };
-    });
-  }, [sales, filtered, range]);
+    return Array.from(map.keys())
+      .sort((a, b) => a - b)
+      .map((d) => ({
+        day: new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        revenue: Math.round((map.get(d) ?? 0) * 100) / 100,
+      }));
+  }, [sales, range, start, end]);
 
   // Top items by revenue within the selected range
   const topItems = useMemo(() => {
@@ -112,18 +136,40 @@ export default function Reports() {
           <TrendingUp size={22} />
           Revenue Reports
         </h2>
-        <div className="flex gap-1.5 bg-ink-100 rounded-xl p-1">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setRange(opt.key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                range === opt.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex gap-1.5 bg-ink-100 rounded-xl p-1">
+            {RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setRange(opt.key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                  range === opt.key ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {range === 'custom' && (
+            <div className="flex items-center gap-2 bg-white rounded-xl border border-ink-200 px-3 py-1.5">
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="text-sm text-ink-700 bg-transparent focus:outline-none"
+              />
+              <span className="text-ink-400 text-sm">to</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={toDateInputValue(Date.now())}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="text-sm text-ink-700 bg-transparent focus:outline-none"
+              />
+            </div>
+          )}
         </div>
       </div>
 
