@@ -85,7 +85,6 @@ export const SEED_MENU: MenuItem[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   restaurantName: 'My Restaurant',
-  masterPin: '1234',
   taxRate: 8,
   currency: '$',
   tableCount: 12,
