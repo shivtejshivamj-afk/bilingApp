@@ -6,9 +6,15 @@ import {
   deleteRestaurant,
   signIn,
   signOut,
-  isPlatformAdmin,
   type RestaurantRecord,
 } from '@/lib/sync';
+import { supabase } from '@/lib/supabase';
+
+async function checkPlatformAdmin(): Promise<boolean> {
+  await supabase.auth.getSession();
+  const { data, error } = await supabase.rpc('is_platform_admin');
+  return !error && data === true;
+}
 
 export default function PlatformAdmin() {
   const [authed, setAuthed] = useState(false);
@@ -16,7 +22,7 @@ export default function PlatformAdmin() {
 
   useEffect(() => {
     let cancelled = false;
-    isPlatformAdmin().then((ok) => {
+    checkPlatformAdmin().then((ok) => {
       if (!cancelled) {
         setAuthed(ok);
         setChecking(false);
@@ -63,7 +69,7 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    const allowed = await isPlatformAdmin();
+    const allowed = await checkPlatformAdmin();
     if (!allowed) {
       await signOut();
       setError('This account is not authorized as a platform administrator.');
