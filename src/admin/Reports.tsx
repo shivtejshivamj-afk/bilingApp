@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, IndianRupee, Receipt, Package } from 'lucide-react';
+import { TrendingUp, IndianRupee, Receipt, Package, Banknote, Smartphone, CreditCard, HelpCircle } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -25,6 +25,18 @@ const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: '30d', label: 'Last 30 days' },
   { key: 'all', label: 'All time' },
   { key: 'custom', label: 'Custom' },
+];
+
+// The buckets Reports splits revenue into. "unspecified" covers bills made
+// before payment methods were tracked — shown honestly as "Not recorded"
+// rather than guessed.
+type PaymentBucket = 'cash' | 'upi' | 'card' | 'unspecified';
+
+const PAYMENT_BUCKETS: { key: PaymentBucket; label: string; Icon: typeof Banknote; bar: string; bubble: string }[] = [
+  { key: 'cash', label: 'Cash', Icon: Banknote, bar: 'bg-basil-500', bubble: 'bg-basil-100 text-basil-700' },
+  { key: 'upi', label: 'UPI', Icon: Smartphone, bar: 'bg-saffron-500', bubble: 'bg-saffron-100 text-saffron-700' },
+  { key: 'card', label: 'Card', Icon: CreditCard, bar: 'bg-ink-700', bubble: 'bg-ink-100 text-ink-700' },
+  { key: 'unspecified', label: 'Not recorded', Icon: HelpCircle, bar: 'bg-ink-300', bubble: 'bg-ink-100 text-ink-500' },
 ];
 
 const PIE_COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#14b8a6'];
@@ -127,6 +139,22 @@ export default function Reports() {
       .slice(0, 8);
   }, [filtered]);
 
+  // Revenue split by how the customer paid, for the selected date range.
+  const paymentBreakdown = useMemo(() => {
+    const base: Record<PaymentBucket, { amount: number; count: number }> = {
+      cash: { amount: 0, count: 0 },
+      upi: { amount: 0, count: 0 },
+      card: { amount: 0, count: 0 },
+      unspecified: { amount: 0, count: 0 },
+    };
+    filtered.forEach((s) => {
+      const bucket: PaymentBucket = s.paymentMethod ?? 'unspecified';
+      base[bucket].amount += s.total;
+      base[bucket].count += 1;
+    });
+    return base;
+  }, [filtered]);
+
   const hasData = filtered.length > 0;
 
   return (
@@ -199,6 +227,45 @@ export default function Reports() {
         </div>
       ) : (
         <>
+          {/* Payment methods */}
+          <div className="bg-white rounded-2xl border border-ink-200 p-5">
+            <h3 className="font-semibold text-ink-900">Payment Methods</h3>
+            <p className="text-xs text-ink-500 mt-0.5 mb-4">How customers paid in this period</p>
+
+            {totals.revenue > 0 && (
+              <div className="flex h-3 rounded-full overflow-hidden bg-ink-100 mb-4">
+                {PAYMENT_BUCKETS.filter((b) => paymentBreakdown[b.key].amount > 0).map((b) => (
+                  <div
+                    key={b.key}
+                    className={b.bar}
+                    style={{ width: `${(paymentBreakdown[b.key].amount / totals.revenue) * 100}%` }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {PAYMENT_BUCKETS.filter((b) => b.key !== 'unspecified' || paymentBreakdown.unspecified.count > 0).map((b) => {
+                const { amount, count } = paymentBreakdown[b.key];
+                const pct = totals.revenue > 0 ? Math.round((amount / totals.revenue) * 100) : 0;
+                return (
+                  <div key={b.key} className="rounded-xl border border-ink-200 p-3.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${b.bubble}`}>
+                        <b.Icon size={16} />
+                      </div>
+                      <span className="text-sm font-medium text-ink-600">{b.label}</span>
+                    </div>
+                    <p className="text-lg font-bold text-ink-900 truncate">{formatMoney(amount, settings.currency)}</p>
+                    <p className="text-xs text-ink-500 mt-0.5">
+                      {pct}% · {count} {count === 1 ? 'bill' : 'bills'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Revenue trend */}
           <div className="bg-white rounded-2xl border border-ink-200 p-5">
             <h3 className="font-semibold text-ink-900 mb-4">Revenue Trend</h3>
