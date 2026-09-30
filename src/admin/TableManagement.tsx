@@ -1,12 +1,19 @@
-import { useMemo, useState } from 'react';
-import { Table2, Users, Clock, Wallet, Printer, X, CheckCircle2, Download, Receipt } from 'lucide-react';
-import type { Order, SalesLog } from '@/types';
+import { useMemo, useRef, useState } from 'react';
+import { Table2, Users, Clock, Wallet, Printer, X, CheckCircle2, Download, Receipt, Banknote, Smartphone, CreditCard } from 'lucide-react';
+import type { Order, SalesLog, PaymentMethod } from '@/types';
 import { useOrders, useSettings } from '@/lib/useLocalData';
 import { addSale } from '@/lib/storage';
 import { useRestaurantId } from '@/lib/restaurantContext';
-import { broadcastFullSync } from '@/lib/sync';
+import { broadcastFullSync, insertSales } from '@/lib/sync';
 import { computeSubtotal, computeTax, computeTotal, formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = { cash: 'Cash', upi: 'UPI', card: 'Card' };
+const PAYMENT_OPTIONS: { key: PaymentMethod; label: string; Icon: typeof Banknote }[] = [
+  { key: 'cash', label: 'Cash', Icon: Banknote },
+  { key: 'upi', label: 'UPI', Icon: Smartphone },
+  { key: 'card', label: 'Card', Icon: CreditCard },
+];
 
 interface TableInfo {
   number: number;
@@ -23,6 +30,11 @@ export default function TableManagement() {
   const { settings } = useSettings();
   const [billTable, setBillTable] = useState<number | null>(null);
   const [clearTable, setClearTable] = useState<number | null>(null);
+  // Guards against a double-tap recording the same bill twice while the
+  // save is still in flight. The ref blocks instantly (state updates are
+  // async); the state just lets the buttons show as disabled.
+  const billingRef = useRef(false);
+  const [billing, setBilling] = useState(false);
 
   const tables: TableInfo[] = useMemo(() => {
     const map = new Map<number, TableInfo>();
@@ -49,31 +61,52 @@ export default function TableManagement() {
 
   const billOrder = tables.find((t) => t.number === billTable);
 
-  const generateBill = async () => {
-    if (!billOrder) return;
+  const generateBill = async (method: PaymentMethod) => {
+    if (!billOrder || billingRef.current) return;
+    billingRef.current = true;
+    setBilling(true);
 
     const log: SalesLog = {
-      id: `sale_${Date.now()}`,
+      // Random suffix so two bills made in the same millisecond (e.g. from two
+      // devices) can never share an id.
+      id: `sale_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       tableNumber: billOrder.number,
       items: billOrder.orders.flatMap((o) => o.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price }))),
       subtotal: billOrder.subtotal,
       tax: billOrder.tax,
       total: billOrder.total,
       paidAt: Date.now(),
+      paymentMethod: method,
     };
     // Save the permanent sales record first (this is what Reports reads from
     // — it keeps the full historical revenue data forever), THEN remove the
     // now-settled orders from the live orders table. Without this cleanup
     // step, billed orders would sit in the database indefinitely, growing
     // without bound and cluttering the "All" orders view.
-    addSale(restaurantId, log);
     try {
-      await removeOrdersByTable(billOrder.number);
-    } catch (e) {
-      console.error('Failed to clear billed orders from table:', e);
+      addSale(restaurantId, log);
+      // Also save the sale to Supabase so it survives a cleared browser or a
+      // change of device. If this fails (e.g. offline), the local copy above
+      // is still there and gets uploaded automatically the next time Reports
+      // loads.
+      try {
+        await insertSales(restaurantId, [log]);
+      } catch (e) {
+        console.error('Failed to save sale to Supabase (kept locally, will retry):', e);
+      }
+      try {
+        await removeOrdersByTable(billOrder.number);
+      } catch (e) {
+        console.error('Failed to clear billed orders from table:', e);
+      }
+      broadcastFullSync();
+      setBillTable(null);
+    } finally {
+      // Always release the double-tap guard, even if something above threw —
+      // otherwise billing would stay stuck until the page is refreshed.
+      billingRef.current = false;
+      setBilling(false);
     }
-    broadcastFullSync();
-    setBillTable(null);
   };
 
   const clearTableConfirm = () => {
@@ -173,7 +206,7 @@ export default function TableManagement() {
       {/* Bill modal with printable receipt */}
       <Modal open={billTable != null} onClose={() => setBillTable(null)} title={`Bill — Table ${billTable ?? ''}`} maxWidth="max-w-md">
         {billOrder && (
-          <BillReceipt table={billOrder} currency={settings.currency} restaurantName={settings.restaurantName} taxRate={settings.taxRate} onPay={generateBill} />
+          <BillReceipt key={billOrder.number} busy={billing} table={billOrder} currency={settings.currency} restaurantName={settings.restaurantName} taxRate={settings.taxRate} onPay={generateBill} />
         )}
       </Modal>
 
@@ -196,15 +229,19 @@ function BillReceipt({
   restaurantName,
   taxRate,
   onPay,
+  busy,
 }: {
   table: TableInfo;
   currency: string;
   restaurantName: string;
   taxRate: number;
-  onPay: () => void;
+  onPay: (method: PaymentMethod) => void;
+  busy: boolean;
 }) {
+  const [method, setMethod] = useState<PaymentMethod | null>(null);
   const allItems = table.orders.flatMap((o) => o.items);
   const print = () => {
+    if (!method) return;
     const itemsHtml = allItems.map((item) => `<tr><td>${item.quantity}&times; ${item.name}</td><td style="text-align:right">${formatMoney(item.price * item.quantity, currency)}</td></tr>`).join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill - Table ${table.number}</title>
       <style>
@@ -230,6 +267,7 @@ function BillReceipt({
         </table>
         <hr/>
         <table><tr class="total"><td>TOTAL</td><td style="text-align:right">${formatMoney(table.total, currency)}</td></tr></table>
+        <p class="sub">Paid by ${PAYMENT_LABELS[method]}</p>
         <p class="thank">Thank you for dining with us!</p>
       </body></html>`;
 
@@ -245,11 +283,12 @@ function BillReceipt({
       iframe.contentWindow?.print();
       setTimeout(() => document.body.removeChild(iframe), 1000);
     }, 300);
-    onPay();
+    onPay(method);
   };
 
   const markDone = () => {
-    onPay();
+    if (!method) return;
+    onPay(method);
   };
 
   return (
@@ -284,18 +323,38 @@ function BillReceipt({
         <p className="text-center text-xs text-ink-400 mt-3">Thank you for dining with us!</p>
       </div>
       <div className="ticket-edge text-parchment-100 bg-white h-2.5 -mt-px rounded-b-xl" />
-      <p className="text-center text-xs text-ink-400 mt-4 mb-2">Table settled — choose how to finish up</p>
+      <p className="text-center text-xs font-medium text-ink-500 mt-4 mb-2">How did the customer pay?</p>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {PAYMENT_OPTIONS.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setMethod(key)}
+            className={`py-3 rounded-xl border-2 font-semibold text-sm flex flex-col items-center gap-1 transition-all ${
+              method === key
+                ? 'border-basil-500 bg-basil-50 text-basil-700'
+                : 'border-ink-200 text-ink-600 hover:bg-ink-50'
+            }`}
+          >
+            <Icon size={20} />
+            {label}
+          </button>
+        ))}
+      </div>
+      {!method && <p className="text-center text-xs text-ink-400 mb-2">Pick a payment method to finish this bill</p>}
       <div className="flex gap-2.5">
         <button
           onClick={print}
-          className="flex-1 py-3.5 rounded-xl bg-basil-500 hover:bg-basil-600 text-white font-bold flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg"
+          disabled={!method || busy}
+          className="flex-1 py-3.5 rounded-xl bg-basil-500 hover:bg-basil-600 text-white font-bold flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
         >
           <Printer size={18} />
           Print Bill
         </button>
         <button
           onClick={markDone}
-          className="flex-1 py-3.5 rounded-xl border-2 border-ink-200 text-ink-700 font-bold flex items-center justify-center gap-2 transition-all hover:bg-ink-50 hover:-translate-y-0.5 active:translate-y-0"
+          disabled={!method || busy}
+          className="flex-1 py-3.5 rounded-xl border-2 border-ink-200 text-ink-700 font-bold flex items-center justify-center gap-2 transition-all hover:bg-ink-50 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:bg-transparent"
         >
           <CheckCircle2 size={18} />
           Order Done
