@@ -1,4 +1,4 @@
-import type { MenuItem, Order, Settings } from '@/types';
+import type { MenuItem, Order, SalesLog, Settings } from '@/types';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -7,8 +7,12 @@ import { supabase } from './supabase';
 // backs (ownership-based RLS instead of a shared PIN with an open API key).
 // ---------------------------------------------------------------------------
 
-export async function signUp(email: string, password: string): Promise<{ userId: string } | { error: string }> {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+export async function signUp(email: string, password: string, emailRedirectTo?: string): Promise<{ userId: string } | { error: string }> {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: emailRedirectTo ? { emailRedirectTo } : undefined,
+  });
   if (error) return { error: error.message };
   if (!data.user) return { error: 'Account creation did not return a user. Please try again.' };
   return { userId: data.user.id };
@@ -171,8 +175,7 @@ export async function createRestaurant(slug: string, name: string, ownerId: stri
 // ---------------------------------------------------------------------------
 // Platform admin — approving/rejecting new restaurant signups. Gated by a
 // password screen client-side (see PlatformAdmin.tsx), not a real separate
-// login system — see the migration this ships with for the security
-// trade-off that implies.
+// login system.
 // ---------------------------------------------------------------------------
 
 export async function fetchAllRestaurants(): Promise<RestaurantRecord[]> {
@@ -449,6 +452,77 @@ function getFullSyncChannel(): BroadcastChannel | null {
   if (typeof BroadcastChannel === 'undefined') return null;
   fullSyncChannel = new BroadcastChannel(CHANNEL);
   return fullSyncChannel;
+}
+
+// ---------------------------------------------------------------------------
+// Sales — the permanent record of every settled bill, including how it was
+// paid. Saved per restaurant in Supabase (see 20261001000000_sales_table.sql)
+// so revenue history survives a cleared browser or a change of device.
+// ---------------------------------------------------------------------------
+
+function rowToSale(row: any): SalesLog {
+  return {
+    id: row.id,
+    tableNumber: row.table_number,
+    items: row.items ?? [],
+    subtotal: Number(row.subtotal),
+    tax: Number(row.tax),
+    total: Number(row.total),
+    paidAt: Number(row.paid_at),
+    paymentMethod: row.payment_method ?? undefined,
+  };
+}
+
+function saleToRow(restaurantId: string, sale: SalesLog) {
+  return {
+    id: sale.id,
+    restaurant_id: restaurantId,
+    table_number: sale.tableNumber,
+    items: sale.items,
+    subtotal: sale.subtotal,
+    tax: sale.tax,
+    total: sale.total,
+    payment_method: sale.paymentMethod ?? null,
+    paid_at: sale.paidAt,
+  };
+}
+
+// Supabase returns at most 1,000 rows per request, so a busy cafe's history
+// has to be read in pages — otherwise older bills would be silently cut off
+// and Reports would under-report revenue with no warning.
+const SALES_PAGE_SIZE = 1000;
+const SALES_MAX_ROWS = 100000; // safety ceiling, far beyond any realistic cafe
+
+export async function fetchSales(restaurantId: string): Promise<SalesLog[]> {
+  const all: SalesLog[] = [];
+  for (let from = 0; from < SALES_MAX_ROWS; from += SALES_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('paid_at', { ascending: false })
+      .range(from, from + SALES_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data ?? []).map(rowToSale);
+    all.push(...page);
+    if (page.length < SALES_PAGE_SIZE) break;
+  }
+  return all;
+}
+
+// ignoreDuplicates: a sale that's already saved is left exactly as it is —
+// so retrying an upload (or backfilling old local history) can never
+// overwrite or double-count anything.
+export async function insertSales(restaurantId: string, sales: SalesLog[]): Promise<void> {
+  if (sales.length === 0) return;
+  const CHUNK = 500;
+  for (let i = 0; i < sales.length; i += CHUNK) {
+    const rows = sales.slice(i, i + CHUNK).map((s) => saleToRow(restaurantId, s));
+    const { error } = await supabase
+      .from('sales')
+      .upsert(rows, { onConflict: 'restaurant_id,id', ignoreDuplicates: true });
+    if (error) throw error;
+  }
 }
 
 export function subscribeToFullSync(listener: () => void): () => void {
