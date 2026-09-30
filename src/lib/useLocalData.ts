@@ -18,6 +18,8 @@ import {
   upsertMenuItem,
   deleteMenuItem,
   subscribeToMenuEvents,
+  fetchSales,
+  insertSales,
 } from './sync';
 import { useRestaurantId } from './restaurantContext';
 import type { RestaurantRecord } from './sync';
@@ -481,21 +483,104 @@ export function useSettings() {
 }
 
 // ---------------------------------------------------------------------------
-// Sales log — still local-only per device (see storage.ts for why); scoped
-// per restaurant so different restaurants on the same browser don't mix.
+// Sales log — saved in Supabase (per restaurant, so it survives a cleared
+// browser or a change of device, and every device sees the same revenue),
+// with the device's local copy kept as a cache and as a fallback if the
+// network is down.
+//
+// Merging rules (this is what keeps existing history safe):
+//  - Sales in Supabase are the source of truth.
+//  - Any sale that exists ONLY on this device (recorded before cloud saving
+//    existed, or while offline) is kept AND uploaded as a one-time backup.
+//    Uploading never overwrites or double-counts — matching ids are skipped.
+//  - If Supabase can't be reached, the device's own history is shown as-is.
 // ---------------------------------------------------------------------------
+
+const SALES_SYNC_MIN_GAP_MS = 15000;
+const salesSyncInFlight = new Map<string, Promise<SalesLog[]>>();
+const salesLastSynced = new Map<string, number>();
+
+function syncSales(restaurantId: string, force = false): Promise<SalesLog[]> {
+  const running = salesSyncInFlight.get(restaurantId);
+  if (running) return running;
+
+  const last = salesLastSynced.get(restaurantId) ?? 0;
+  if (!force && Date.now() - last < SALES_SYNC_MIN_GAP_MS) {
+    return Promise.resolve(storage.getSales(restaurantId));
+  }
+
+  const job = (async () => {
+    const local = storage.getSales(restaurantId);
+    try {
+      const remote = await fetchSales(restaurantId);
+      const remoteIds = new Set(remote.map((s) => s.id));
+      const localOnly = local.filter((s) => !remoteIds.has(s.id));
+
+      if (localOnly.length > 0) {
+        // Best-effort backup upload; if it fails, the local copies remain
+        // and get retried on the next sync.
+        try {
+          await insertSales(restaurantId, localOnly);
+        } catch (e) {
+          console.error('Could not back up local sales to Supabase:', e);
+        }
+      }
+
+      const merged = [...remote, ...localOnly].sort((a, b) => b.paidAt - a.paidAt);
+      storage.setSales(restaurantId, merged);
+      salesLastSynced.set(restaurantId, Date.now());
+      return merged;
+    } catch (e) {
+      console.error('Could not load sales from Supabase, showing history saved on this device:', e);
+      return local;
+    } finally {
+      salesSyncInFlight.delete(restaurantId);
+    }
+  })();
+
+  salesSyncInFlight.set(restaurantId, job);
+  return job;
+}
 
 export function useSales() {
   const restaurantId = useRestaurantId();
   const [sales, setSalesState] = useState<SalesLog[]>(() => storage.getSales(restaurantId));
 
-  const refresh = useCallback(() => setSalesState(storage.getSales(restaurantId)), [restaurantId]);
-
-  useEffect(() => {
+  const refresh = useCallback(() => {
     setSalesState(storage.getSales(restaurantId));
+    syncSales(restaurantId, true).then(setSalesState);
   }, [restaurantId]);
 
   useEffect(() => {
+    let cancelled = false;
+    setSalesState(storage.getSales(restaurantId));
+
+    const sync = (force = false) => {
+      syncSales(restaurantId, force).then((merged) => {
+        if (!cancelled) setSalesState(merged);
+      });
+    };
+
+    sync();
+
+    // Pick up bills made on other devices: when the tab comes back into
+    // view, and every 30s while it stays open.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = window.setInterval(() => sync(), 30000);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(interval);
+    };
+  }, [restaurantId]);
+
+  useEffect(() => {
+    // A bill was just made on this device — show it immediately from the
+    // local copy (it's already saved there), no network wait.
     return subscribeToFullSync(() => setSalesState(storage.getSales(restaurantId)));
   }, [restaurantId]);
 
