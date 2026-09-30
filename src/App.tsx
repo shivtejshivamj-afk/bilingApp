@@ -192,7 +192,10 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
   }, [authState, restaurant.status]);
 
   if (route === 'customer') {
-    if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
+    // Only approved restaurants can accept customer orders. Pending/rejected/
+    // suspended restaurants remain inaccessible for ordering even though their
+    // public slug can still resolve.
+    if (restaurant.status !== 'approved') {
       return <OrderingUnavailable restaurantName={settings.restaurantName} />;
     }
     return <CustomerApp />;
