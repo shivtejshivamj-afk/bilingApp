@@ -39,7 +39,6 @@ export interface Order {
 
 export interface Settings {
   restaurantName: string;
-  masterPin: string;
   taxRate: number; // percentage e.g. 8 = 8%
   currency: string;
   tableCount: number;
