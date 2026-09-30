@@ -58,6 +58,9 @@ export function setSales(restaurantId: string, sales: SalesLog[]): void {
 
 export function addSale(restaurantId: string, log: SalesLog): void {
   const sales = getSales(restaurantId);
+  // Sale IDs are deterministic for a set of billed orders, so retries across
+  // devices must not create duplicate local history entries.
+  if (sales.some((sale) => sale.id === log.id)) return;
   sales.unshift(log);
   setSales(restaurantId, sales);
 }
