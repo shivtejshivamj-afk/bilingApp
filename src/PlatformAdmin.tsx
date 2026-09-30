@@ -1,40 +1,78 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
-import { fetchAllRestaurants, setRestaurantStatus, deleteRestaurant, type RestaurantRecord } from '@/lib/sync';
-
-// Gates this panel client-side, the same trade-off already used for the
-// legacy PIN system elsewhere in this app — set VITE_PLATFORM_ADMIN_PASSWORD
-// in Vercel's environment variables so it's not baked into the source code.
-// Falls back to a default only so the panel isn't completely inaccessible
-// if that variable was never set — change it immediately if you're relying
-// on the fallback.
-const PLATFORM_PASSWORD = import.meta.env.VITE_PLATFORM_ADMIN_PASSWORD || 'changeme';
+import { ShieldCheck, Mail, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  fetchAllRestaurants,
+  setRestaurantStatus,
+  deleteRestaurant,
+  signIn,
+  signOut,
+  isPlatformAdmin,
+  type RestaurantRecord,
+} from '@/lib/sync';
 
 export default function PlatformAdmin() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('rbs_platform_admin_auth') === '1');
+  const [authed, setAuthed] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    isPlatformAdmin().then((ok) => {
+      if (!cancelled) {
+        setAuthed(ok);
+        setChecking(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-ink-900 flex items-center justify-center">
+        <RefreshCw className="animate-spin text-basil-400" size={28} />
+      </div>
+    );
+  }
 
   if (!authed) {
-    return <PlatformAdminGate onSuccess={() => {
-      sessionStorage.setItem('rbs_platform_admin_auth', '1');
-      setAuthed(true);
-    }} />;
+    return (
+      <PlatformAdminGate
+        onSuccess={() => setAuthed(true)}
+      />
+    );
   }
-  return <PlatformAdminDashboard />;
+
+  return <PlatformAdminDashboard onLogout={async () => { await signOut(); setAuthed(false); }} />;
 }
 
 function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === PLATFORM_PASSWORD) {
-      onSuccess();
-    } else {
-      setError(true);
-      setPassword('');
-      setTimeout(() => setError(false), 600);
+    setSubmitting(true);
+    setError(null);
+
+    const result = await signIn(email.trim(), password);
+    if ('error' in result) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
     }
+
+    const allowed = await isPlatformAdmin();
+    if (!allowed) {
+      await signOut();
+      setError('This account is not authorized as a platform administrator.');
+      setSubmitting(false);
+      return;
+    }
+
+    onSuccess();
+    setSubmitting(false);
   };
 
   return (
@@ -45,25 +83,54 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
             <ShieldCheck className="text-white" size={30} />
           </div>
           <h1 className="text-2xl font-display font-semibold text-white">Platform Admin</h1>
+          <p className="text-ink-500 text-xs mt-2 text-center">Use your Supabase administrator account.</p>
         </div>
-        <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700">
-          <label className="block text-sm font-medium text-ink-300 mb-2">Admin Password</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              className={`w-full pl-10 pr-3 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400 transition ${error ? 'ring-2 ring-paprika-500 animate-[shake_0.4s]' : ''}`}
-            />
+
+        <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-ink-300 mb-1.5">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+                className="w-full pl-10 pr-3 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400"
+                placeholder="admin@example.com"
+              />
+            </div>
           </div>
-          {error && <p className="text-paprika-300 text-sm mt-2">Incorrect password.</p>}
+
+          <div>
+            <label className="block text-sm font-medium text-ink-300 mb-1.5">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={18} />
+              <input
+                type={show ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-11 py-3.5 rounded-xl bg-ink-700 text-white placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-basil-400"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShow((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-white"
+              >
+                {show ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="text-paprika-300 text-sm">{error}</p>}
+
           <button
             type="submit"
-            className="w-full mt-5 py-3.5 rounded-xl bg-basil-500 text-white font-bold hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md hover:shadow-lg"
+            disabled={submitting || !email.trim() || !password}
+            className="w-full py-3.5 rounded-xl bg-basil-500 text-white font-bold hover:bg-basil-600 disabled:opacity-50 transition"
           >
-            Enter
+            {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
@@ -71,19 +138,22 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function PlatformAdminDashboard() {
+function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [restaurants, setRestaurants] = useState<RestaurantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RestaurantRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       setRestaurants(await fetchAllRestaurants());
-    } catch (e) {
-      console.error('Failed to load restaurants:', e);
+    } catch (e: any) {
+      setLoadError(e?.message || 'Failed to load restaurants.');
     } finally {
       setLoading(false);
     }
@@ -95,11 +165,12 @@ function PlatformAdminDashboard() {
 
   const act = async (id: string, status: 'approved' | 'rejected' | 'suspended') => {
     setBusyId(id);
+    setActionError(null);
     try {
       await setRestaurantStatus(id, status);
       setRestaurants((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
-    } catch (e) {
-      console.error('Failed to update restaurant status:', e);
+    } catch (e: any) {
+      setActionError(e?.message || 'Failed to update restaurant status.');
     } finally {
       setBusyId(null);
     }
@@ -108,12 +179,13 @@ function PlatformAdminDashboard() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
+    setActionError(null);
     try {
       await deleteRestaurant(deleteTarget.id);
       setRestaurants((prev) => prev.filter((r) => r.id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch (e) {
-      console.error('Failed to delete restaurant:', e);
+    } catch (e: any) {
+      setActionError(e?.message || 'Failed to delete restaurant.');
     } finally {
       setDeleting(false);
     }
@@ -132,17 +204,31 @@ function PlatformAdminDashboard() {
             </div>
             <h1 className="font-display font-semibold text-lg">Platform Admin</h1>
           </div>
-          <button
-            onClick={load}
-            className="p-2 rounded-lg hover:bg-ink-800 text-ink-300 hover:text-white transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={load}
+              className="p-2 rounded-lg hover:bg-ink-800 text-ink-300 hover:text-white transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={onLogout}
+              className="px-3 py-2 rounded-lg border border-ink-700 text-sm text-ink-300 hover:text-white hover:bg-ink-800 transition"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        {(loadError || actionError) && (
+          <div className="bg-paprika-50 border border-paprika-200 text-paprika-700 rounded-xl p-3 text-sm">
+            {loadError || actionError}
+          </div>
+        )}
+
         <section>
           <h2 className="text-lg font-bold font-display text-ink-900 mb-4 flex items-center gap-2">
             <Clock size={19} className="text-saffron-500" />
@@ -198,44 +284,30 @@ function PlatformAdminDashboard() {
                   <p className="text-xs text-ink-500 font-mono truncate">/{r.slug}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      r.status === 'approved'
-                        ? 'bg-basil-100 text-basil-700'
-                        : r.status === 'suspended'
-                        ? 'bg-ink-200 text-ink-600'
-                        : 'bg-paprika-100 text-paprika-700'
-                    }`}
-                  >
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    r.status === 'approved'
+                      ? 'bg-basil-100 text-basil-700'
+                      : r.status === 'suspended'
+                      ? 'bg-ink-200 text-ink-600'
+                      : 'bg-paprika-100 text-paprika-700'
+                  }`}>
                     {r.status}
                   </span>
                   {r.status === 'rejected' && (
-                    <button
-                      onClick={() => act(r.id, 'approved')}
-                      disabled={busyId === r.id}
-                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
-                      title="Re-approve this restaurant"
-                    >
+                    <button onClick={() => act(r.id, 'approved')} disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40">
                       <RotateCcw size={13} /> Re-approve
                     </button>
                   )}
                   {r.status === 'approved' && (
-                    <button
-                      onClick={() => act(r.id, 'suspended')}
-                      disabled={busyId === r.id}
-                      className="px-2.5 py-1.5 rounded-lg bg-ink-100 text-ink-600 text-xs font-semibold hover:bg-ink-200 transition flex items-center gap-1 disabled:opacity-40"
-                      title="Suspend this restaurant (e.g. payment not received) — blocks their dashboard and customer ordering without deleting anything"
-                    >
+                    <button onClick={() => act(r.id, 'suspended')} disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-ink-100 text-ink-600 text-xs font-semibold hover:bg-ink-200 transition flex items-center gap-1 disabled:opacity-40">
                       <Lock size={13} /> Suspend
                     </button>
                   )}
                   {r.status === 'suspended' && (
-                    <button
-                      onClick={() => act(r.id, 'approved')}
-                      disabled={busyId === r.id}
-                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
-                      title="Reactivate this restaurant"
-                    >
+                    <button onClick={() => act(r.id, 'approved')} disabled={busyId === r.id}
+                      className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40">
                       <RotateCcw size={13} /> Reactivate
                     </button>
                   )}
@@ -263,11 +335,8 @@ function PlatformAdminDashboard() {
             <h3 className="text-lg font-bold font-display text-ink-900 mb-2">
               Delete "{deleteTarget.settings.restaurantName}"?
             </h3>
-            <p className="text-sm text-ink-500 mb-2">
-              This permanently deletes this restaurant's menu, orders, and the restaurant record itself. This can't be undone.
-            </p>
-            <p className="text-xs text-ink-400 mb-4">
-              Note: their login account itself isn't deleted by this (that requires separate access Supabase doesn't allow safely from this panel) — but with no restaurant left, it won't be usable to access anything here.
+            <p className="text-sm text-ink-500 mb-4">
+              This permanently deletes this restaurant's menu, orders, sales, and the restaurant record. This can't be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
