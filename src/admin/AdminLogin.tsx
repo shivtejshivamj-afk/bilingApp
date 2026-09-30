@@ -11,21 +11,34 @@ interface Props {
    * nobody has secured it yet — still reachable with the old PIN in the
    * meantime, with a prompt to set up a real login. */
   ownerId: string | null;
+  /** Shown as a banner above the form — used when someone lands here
+   * because they were just signed out automatically (e.g. suspended while
+   * actively using the dashboard), so it's clear this wasn't a normal
+   * logout they chose themselves. */
+  notice?: string;
   onSuccess: (userId: string) => void;
 }
 
-export default function AdminLogin({ settings, restaurantId, ownerId, onSuccess }: Props) {
+export default function AdminLogin({ settings, restaurantId, ownerId, notice, onSuccess }: Props) {
   if (ownerId === null) {
     return <UnclaimedLogin settings={settings} restaurantId={restaurantId} onSuccess={onSuccess} />;
   }
-  return <SecureLogin settings={settings} onSuccess={onSuccess} />;
+  return <SecureLogin settings={settings} notice={notice} onSuccess={onSuccess} />;
 }
 
 // ---------------------------------------------------------------------------
 // Normal case: this restaurant already has a real account. Email + password.
 // ---------------------------------------------------------------------------
 
-function SecureLogin({ settings, onSuccess }: { settings: Settings; onSuccess: (userId: string) => void }) {
+function SecureLogin({
+  settings,
+  notice,
+  onSuccess,
+}: {
+  settings: Settings;
+  notice?: string;
+  onSuccess: (userId: string) => void;
+}) {
   const [mode, setMode] = useState<'login' | 'reset'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +65,11 @@ function SecureLogin({ settings, onSuccess }: { settings: Settings; onSuccess: (
 
   return (
     <AuthShell restaurantName={settings.restaurantName}>
+      {notice && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-paprika-900/50 border border-paprika-800 text-paprika-200 text-sm leading-snug">
+          {notice}
+        </div>
+      )}
       <form onSubmit={submit} className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700 space-y-4">
         <div>
           <label className="block text-sm font-medium text-ink-300 mb-1.5">Email</label>
