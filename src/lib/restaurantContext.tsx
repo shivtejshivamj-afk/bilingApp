@@ -5,6 +5,7 @@ import {
   createRestaurant as createRestaurantRemote,
   seedMenu,
   signUp,
+  subscribeToRestaurantEvents,
   type RestaurantRecord,
 } from './sync';
 import { SEED_MENU } from './seed';
@@ -86,6 +87,18 @@ export function useResolveRestaurant(slug: string) {
       .catch(() => setState({ status: 'not-found' }));
   }, [slug]);
 
+  // Live updates to the restaurant's own row — this is what makes a
+  // suspend/reject/approve from Platform Admin take effect immediately for
+  // anyone already using this restaurant's dashboard, instead of only on
+  // their next page load.
+  const restaurantId = state.status === 'found' ? state.restaurant.id : null;
+  useEffect(() => {
+    if (!restaurantId) return;
+    return subscribeToRestaurantEvents(restaurantId, (updated) => {
+      setState({ status: 'found', restaurant: updated });
+    });
+  }, [restaurantId]);
+
   return { ...state, refresh };
 }
 
@@ -99,7 +112,11 @@ export async function signUpRestaurant(
   email: string,
   password: string
 ): Promise<RestaurantRecord | string> {
-  const authResult = await signUp(email, password);
+  // Send the confirmation email straight to this restaurant's own admin
+  // login (not the generic homepage) — so clicking "Confirm" in the email
+  // lands the owner exactly where they need to sign in, not on the
+  // marketing/intro page.
+  const authResult = await signUp(email, password, buildRestaurantUrl(slug, { admin: true }));
   if ('error' in authResult) return authResult.error;
 
   const created = await createRestaurantRemote(slug, name, authResult.userId);
