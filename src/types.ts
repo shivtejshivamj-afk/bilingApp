@@ -45,6 +45,11 @@ export interface Settings {
   tableCount: number;
 }
 
+// How the customer settled the bill. Optional on SalesLog because sales
+// recorded before this was tracked have no method — Reports shows those
+// as "Not recorded" instead of guessing.
+export type PaymentMethod = 'cash' | 'upi' | 'card';
+
 export interface SalesLog {
   id: string;
   tableNumber: number;
@@ -53,4 +58,5 @@ export interface SalesLog {
   tax: number;
   total: number;
   paidAt: number;
+  paymentMethod?: PaymentMethod;
 }
