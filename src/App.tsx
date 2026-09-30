@@ -220,6 +220,19 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
               : undefined
           }
           onSuccess={() => {
+            // Checked here, before ever showing the dashboard: if this
+            // restaurant is suspended/rejected, the credentials were
+            // correct but access still isn't allowed — sign straight back
+            // out and show why, right here on the login screen. Without
+            // this check, authState would briefly flip to 'in' (showing a
+            // different screen for an instant) before the effect above
+            // caught it and bounced back — correct, but a confusing flash
+            // instead of an immediate, clear answer.
+            if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
+              setKickedReason(restaurant.status);
+              signOut();
+              return;
+            }
             setKickedReason(null);
             setAuthState('in');
             onClaimed(); // refetches the restaurant record so ownerId is current
