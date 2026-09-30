@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { Settings } from '@/types';
 import {
   fetchRestaurantBySlug,
-  createRestaurant as createRestaurantRemote,
   seedMenu,
   signUp,
   subscribeToRestaurantEvents,
@@ -116,15 +115,18 @@ export async function signUpRestaurant(
   // login (not the generic homepage) — so clicking "Confirm" in the email
   // lands the owner exactly where they need to sign in, not on the
   // marketing/intro page.
-  const authResult = await signUp(email, password, buildRestaurantUrl(slug, { admin: true }));
+  const authResult = await signUp(email, password, buildRestaurantUrl(slug, { admin: true }), { restaurantSlug: slug, restaurantName: name });
   if ('error' in authResult) return authResult.error;
 
-  const created = await createRestaurantRemote(slug, name, authResult.userId);
-  if (!created) return 'That URL is already taken — try a different one.';
+  // The database trigger creates the tenant row from the authenticated
+  // user's signup metadata. This works even when email confirmation is
+  // enabled, because the browser no longer needs to insert a row as anon.
+  const created = await fetchRestaurantBySlug(slug);
+  if (!created) return 'Your account was created, but the restaurant setup did not finish. Please try again or contact support.';
 
-  // Give every new restaurant a starter menu so the admin isn't staring at
-  // a completely empty screen — ids are namespaced per-restaurant so two
-  // different restaurants seeding at the same time never collide.
+  // Give every new restaurant a starter menu when a live session is already
+  // available. If Supabase requires email confirmation first, this insert can
+  // be completed later by the owner from the dashboard.
   const seeded = SEED_MENU.map((item) => ({ ...item, id: `${created.id}_${item.id}` }));
   try {
     await seedMenu(created.id, seeded);
