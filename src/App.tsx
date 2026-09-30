@@ -132,6 +132,13 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
   // session exists — sessions are shared across the whole site).
   const [authState, setAuthState] = useState<'checking' | 'in' | 'out'>('checking');
 
+  // Set only when someone actively using the dashboard gets signed out
+  // automatically because the restaurant's status changed under them (e.g.
+  // suspended mid-session) — shown as a banner on the login screen they
+  // land back on, so it's clear this wasn't a normal logout they did
+  // themselves.
+  const [kickedReason, setKickedReason] = useState<'suspended' | 'rejected' | null>(null);
+
   // Read through a ref rather than depending on restaurant.ownerId directly
   // below — this lets the auth check/subscription set up exactly ONCE and
   // stay put for the lifetime of this screen, instead of tearing down and
@@ -172,6 +179,18 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // If Platform Admin suspends or rejects this restaurant WHILE someone is
+  // already signed into its dashboard, this fires immediately (thanks to
+  // the realtime subscription in useResolveRestaurant) rather than waiting
+  // for them to refresh — they're signed out on the spot and sent back to
+  // the login screen with a clear explanation.
+  useEffect(() => {
+    if (authState !== 'in') return;
+    if (restaurant.status !== 'suspended' && restaurant.status !== 'rejected') return;
+    setKickedReason(restaurant.status);
+    signOut().then(() => setAuthState('out'));
+  }, [authState, restaurant.status]);
+
   if (route === 'customer') {
     if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
       return <OrderingUnavailable restaurantName={settings.restaurantName} />;
@@ -193,7 +212,15 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
           settings={settings}
           restaurantId={restaurant.id}
           ownerId={restaurant.ownerId}
+          notice={
+            kickedReason === 'suspended'
+              ? 'Your account has been suspended. If you believe this is a mistake, or need to settle your account, please contact the platform owner.'
+              : kickedReason === 'rejected'
+              ? 'This restaurant is no longer approved on the platform. Please contact the platform owner.'
+              : undefined
+          }
           onSuccess={() => {
+            setKickedReason(null);
             setAuthState('in');
             onClaimed(); // refetches the restaurant record so ownerId is current
           }}
