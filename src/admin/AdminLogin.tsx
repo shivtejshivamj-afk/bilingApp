@@ -6,6 +6,11 @@ import { buildRestaurantUrl, getSlugFromPath } from '@/lib/restaurantContext';
 
 interface Props {
   settings: Settings;
+  restaurantId: string;
+  /** null if this restaurant was created before real accounts existed and
+   * nobody has secured it yet — still reachable with the old PIN in the
+   * meantime, with a prompt to set up a real login. */
+  ownerId: string | null;
   /** Shown as a banner above the form — used when someone lands here
    * because they were just signed out automatically (e.g. suspended while
    * actively using the dashboard), so it's clear this wasn't a normal
@@ -14,7 +19,10 @@ interface Props {
   onSuccess: (userId: string) => void;
 }
 
-export default function AdminLogin({ settings, notice, onSuccess }: Props) {
+export default function AdminLogin({ settings, restaurantId, ownerId, notice, onSuccess }: Props) {
+  if (ownerId === null) {
+    return <UnconfiguredLogin settings={settings} />;
+  }
   return <SecureLogin settings={settings} notice={notice} onSuccess={onSuccess} />;
 }
 
@@ -216,9 +224,26 @@ function ResetPasswordRequest({
 }
 
 // ---------------------------------------------------------------------------
-// Restaurant admin login is email + password only. Legacy Master PIN access
-// has been removed; existing restaurant accounts use Supabase Auth directly.
+// Safety fallback: restaurants without an owner account cannot use the old
+// Master PIN flow anymore. They must be configured with a real Supabase Auth
+// owner account before the dashboard can be accessed.
 // ---------------------------------------------------------------------------
+
+function UnconfiguredLogin({ settings }: { settings: Settings }) {
+  return (
+    <AuthShell restaurantName={settings.restaurantName}>
+      <div className="bg-ink-800 rounded-2xl p-6 shadow-ticket-lg border border-ink-700 text-center">
+        <div className="w-12 h-12 rounded-full bg-paprika-500/20 flex items-center justify-center mx-auto mb-4">
+          <ShieldCheck size={22} className="text-paprika-300" />
+        </div>
+        <h2 className="font-semibold text-white mb-1.5">Restaurant login not configured</h2>
+        <p className="text-ink-400 text-sm">
+          This restaurant does not have a staff account assigned yet. Please contact the platform owner to finish the account setup.
+        </p>
+      </div>
+    </AuthShell>
+  );
+}
 
 function AuthShell({ restaurantName, children }: { restaurantName: string; children: React.ReactNode }) {
   return (
