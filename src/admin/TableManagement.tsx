@@ -66,10 +66,17 @@ export default function TableManagement() {
     billingRef.current = true;
     setBilling(true);
 
+    // Deterministic ID: the same set of open order IDs always produces the
+    // same sale ID. If two staff devices bill the same table simultaneously,
+    // Supabase/local history can safely treat the second attempt as the same
+    // sale instead of creating duplicate revenue.
+    const source = `${restaurantId}|${billOrder.number}|${billOrder.orders.map((o) => o.id).sort().join('|')}`;
+    let hash = 0;
+    for (let i = 0; i < source.length; i++) hash = ((hash << 5) - hash + source.charCodeAt(i)) | 0;
+    const stableSaleId = `sale_${Math.abs(hash).toString(36)}_${billOrder.orders.length}_${billOrder.number}`;
+
     const log: SalesLog = {
-      // Random suffix so two bills made in the same millisecond (e.g. from two
-      // devices) can never share an id.
-      id: `sale_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: stableSaleId,
       tableNumber: billOrder.number,
       items: billOrder.orders.flatMap((o) => o.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price }))),
       subtotal: billOrder.subtotal,
