@@ -7,11 +7,21 @@ import { supabase } from './supabase';
 // backs (ownership-based RLS instead of a shared PIN with an open API key).
 // ---------------------------------------------------------------------------
 
-export async function signUp(email: string, password: string, emailRedirectTo?: string): Promise<{ userId: string } | { error: string }> {
+export async function signUp(
+  email: string,
+  password: string,
+  emailRedirectTo?: string,
+  restaurantMeta?: { restaurantSlug: string; restaurantName: string },
+): Promise<{ userId: string } | { error: string }> {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: emailRedirectTo ? { emailRedirectTo } : undefined,
+    options: {
+      ...(emailRedirectTo ? { emailRedirectTo } : {}),
+      ...(restaurantMeta
+        ? { data: { restaurant_slug: restaurantMeta.restaurantSlug, restaurant_name: restaurantMeta.restaurantName } }
+        : {}),
+    },
   });
   if (error) return { error: error.message };
   if (!data.user) return { error: 'Account creation did not return a user. Please try again.' };
@@ -29,35 +39,20 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
 
-/** Establishes (or confirms) a real, if anonymous, session for a customer
- * opening a restaurant's QR menu, and ties it to that specific restaurant
- * via table_sessions. This is what lets the database itself enforce that a
- * customer can only read that one restaurant's orders — see the migration
- * this ships with for the full reasoning. Safe to call repeatedly; it's a
- * no-op if a session for this restaurant already exists. */
-export async function ensureTableSession(restaurantId: string): Promise<void> {
-  let { data: sessionData } = await supabase.auth.getSession();
+/** Ensures the customer has an anonymous Supabase session.
+ *
+ * Order access is scoped by `orders.customer_id = auth.uid()` in the database,
+ * so there is no client-writable table-session mapping that can be abused to
+ * unlock another restaurant's orders.
+ */
+export async function ensureTableSession(_restaurantId: string): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session) return;
 
-  if (!sessionData.session) {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      // Anonymous sign-ins may not be enabled on this Supabase project yet
-      // — fail quietly here rather than blocking the customer from seeing
-      // the menu at all; order reads will just come back empty until this
-      // is enabled (see the setup note that ships with this feature).
-      console.error('Failed to start anonymous session:', error.message);
-      return;
-    }
-    ({ data: sessionData } = await supabase.auth.getSession());
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    console.error('Failed to start anonymous session:', error.message);
   }
-
-  const userId = sessionData.session?.user.id;
-  if (!userId) return;
-
-  const { error } = await supabase
-    .from('table_sessions')
-    .upsert({ user_id: userId, restaurant_id: restaurantId, created_at: Date.now() });
-  if (error) console.error('Failed to establish table session:', error.message);
 }
 
 export async function requestPasswordReset(email: string, redirectTo: string): Promise<{ error?: string }> {
@@ -102,14 +97,6 @@ export function onAuthChange(callback: (userId: string | null) => void): () => v
   return () => data.subscription.unsubscribe();
 }
 
-/** Attaches the currently signed-in user as this restaurant's owner. Only
- * works if the restaurant isn't already claimed by someone else (enforced
- * by RLS, not just this check). */
-export async function claimRestaurant(restaurantId: string, ownerId: string): Promise<boolean> {
-  const { error } = await supabase.from('restaurants').update({ owner_id: ownerId }).eq('id', restaurantId);
-  return !error;
-}
-
 // ---------------------------------------------------------------------------
 // Restaurants — the tenant registry. Every other table is scoped to one of
 // these via restaurant_id.
@@ -133,7 +120,6 @@ function rowToRestaurant(row: any): RestaurantRecord {
     status: (row.status ?? 'approved') as RestaurantStatus,
     settings: {
       restaurantName: row.name,
-      masterPin: row.master_pin,
       taxRate: Number(row.tax_rate),
       currency: row.currency,
       tableCount: row.table_count,
@@ -141,8 +127,10 @@ function rowToRestaurant(row: any): RestaurantRecord {
   };
 }
 
+const RESTAURANT_PUBLIC_COLUMNS = 'id, slug, owner_id, status, name, tax_rate, currency, table_count, categories, created_at';
+
 export async function fetchRestaurantById(id: string): Promise<RestaurantRecord | null> {
-  const { data, error } = await supabase.from('restaurants').select('*').eq('id', id).maybeSingle();
+  const { data, error } = await supabase.from('restaurants').select(RESTAURANT_PUBLIC_COLUMNS).eq('id', id).maybeSingle();
   if (error) throw error;
   return data ? rowToRestaurant(data) : null;
 }
@@ -150,36 +138,46 @@ export async function fetchRestaurantById(id: string): Promise<RestaurantRecord 
 export async function fetchRestaurantBySlug(slug: string): Promise<RestaurantRecord | null> {
   const { data, error } = await supabase
     .from('restaurants')
-    .select('*')
+    .select(RESTAURANT_PUBLIC_COLUMNS)
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw error;
   return data ? rowToRestaurant(data) : null;
 }
 
-/** Returns null if the slug is already taken (a friendlier signal than a thrown error). */
-export async function createRestaurant(slug: string, name: string, ownerId: string): Promise<RestaurantRecord | null> {
-  const { data, error } = await supabase
-    .from('restaurants')
-    .insert({ slug, name, owner_id: ownerId, status: 'pending', created_at: Date.now() })
-    .select()
-    .maybeSingle();
+/** Creates a restaurant for the currently authenticated user. The actual
+ * insert happens in a SECURITY DEFINER function that takes auth.uid(), so the
+ * client cannot choose another user's owner_id. */
+export async function createRestaurant(slug: string, name: string): Promise<RestaurantRecord | null> {
+  const { data, error } = await supabase.rpc('create_restaurant', {
+    new_slug: slug,
+    new_name: name,
+  });
   if (error) {
-    // Postgres unique_violation
     if ((error as any).code === '23505') return null;
     throw error;
   }
-  return data ? rowToRestaurant(data) : null;
+  const restaurantId = data as string | null;
+  if (!restaurantId) return null;
+  return fetchRestaurantById(restaurantId);
 }
 
 // ---------------------------------------------------------------------------
-// Platform admin — approving/rejecting new restaurant signups. Gated by a
-// password screen client-side (see PlatformAdmin.tsx), not a real separate
-// login system.
+// Platform admin — approving/rejecting new restaurant signups. Access is
+// controlled by Supabase Auth plus the platform_admins allow-list.
 // ---------------------------------------------------------------------------
 
+export async function isPlatformAdmin(): Promise<boolean> {
+  // Force the persisted Supabase session to be restored before checking the
+  // database allow-list (important on a fresh page load).
+  await supabase.auth.getSession();
+  const { data, error } = await supabase.rpc('is_platform_admin');
+  if (error) return false;
+  return data === true;
+}
+
 export async function fetchAllRestaurants(): Promise<RestaurantRecord[]> {
-  const { data, error } = await supabase.from('restaurants').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('restaurants').select(RESTAURANT_PUBLIC_COLUMNS).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(rowToRestaurant);
 }
@@ -209,7 +207,6 @@ export async function saveSettingsRemote(restaurantId: string, settings: Setting
     .from('restaurants')
     .update({
       name: settings.restaurantName,
-      master_pin: settings.masterPin,
       tax_rate: settings.taxRate,
       currency: settings.currency,
       table_count: settings.tableCount,
@@ -263,10 +260,12 @@ function rowToOrder(row: any): Order {
   };
 }
 
-function orderToRow(restaurantId: string, order: Order) {
+async function orderToRow(restaurantId: string, order: Order) {
+  const { data } = await supabase.auth.getSession();
   return {
     id: order.id,
     restaurant_id: restaurantId,
+    customer_id: data.session?.user.id ?? null,
     table_number: order.tableNumber,
     items: order.items,
     subtotal: order.subtotal,
@@ -289,14 +288,14 @@ export async function fetchOrders(restaurantId: string): Promise<Order[]> {
 }
 
 export async function insertOrder(restaurantId: string, order: Order): Promise<void> {
-  const { error } = await supabase.from('orders').insert(orderToRow(restaurantId, order));
+  const { error } = await supabase.from('orders').insert(await orderToRow(restaurantId, order));
   if (error) throw error;
 }
 
 export async function updateOrder(restaurantId: string, order: Order): Promise<void> {
   const { error } = await supabase
     .from('orders')
-    .update(orderToRow(restaurantId, order))
+    .update(await orderToRow(restaurantId, order))
     .eq('id', order.id)
     .eq('restaurant_id', restaurantId);
   if (error) throw error;
