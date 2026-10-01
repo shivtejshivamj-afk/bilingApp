@@ -254,6 +254,7 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
     }
     return (
       <AdminDashboard
+        restaurantId={restaurant.id}
         onLogout={async () => {
           await signOut();
           setAuthState('out');
