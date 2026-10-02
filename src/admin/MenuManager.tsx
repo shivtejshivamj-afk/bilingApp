@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Eye, EyeOff, X, Tag, Check, Leaf, Drumstick } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, Eye, EyeOff, X, Tag, Check, Leaf, Drumstick } from 'lucide-react';
 import type { MenuItem } from '@/types';
 import { useCategories, useMenu, useSettings } from '@/lib/useLocalData';
 import { formatMoney } from '@/lib/billing';
 import { Modal, ConfirmDialog } from '@/components/ui';
 import { VegIndicator } from '@/components/VegIndicator';
+import { MenuItemImage } from '@/components/MenuItemImage';
+import { compressImage } from '@/lib/imageCompress';
 
 const blankItem = (): Omit<MenuItem, 'id'> => ({
   name: '',
@@ -71,6 +73,25 @@ export default function MenuManager() {
     if (!deleteId) return;
     setMenu(menu.filter((m) => m.id !== deleteId));
     setDeleteId(null);
+  };
+
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [compressingImage, setCompressingImage] = useState(false);
+
+  const onImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    setImageError(null);
+    setCompressingImage(true);
+    try {
+      const compressed = await compressImage(file);
+      setDraft((d) => ({ ...d, image: compressed }));
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Could not process this image.');
+    } finally {
+      setCompressingImage(false);
+    }
   };
 
   const isFormValid = draft.name.trim() && draft.price >= 0 && draft.category.trim() !== '';
@@ -212,17 +233,18 @@ export default function MenuManager() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((item) => (
           <div key={item.id} className="bg-white rounded-2xl border border-ink-200 shadow-sm overflow-hidden group">
-            <div className="p-4 pb-3 border-b border-ink-100 bg-gradient-to-b from-white to-ink-50/40">
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-ink-100 text-ink-600 text-[11px] font-semibold tracking-wide uppercase">
-                  {item.category}
-                </span>
-                {!item.available && (
-                  <span className="px-2 py-1 rounded-full bg-paprika-50 text-paprika-600 text-[11px] font-bold">Unavailable</span>
-                )}
-              </div>
+            <div className="relative h-36 bg-ink-100">
+              <MenuItemImage image={item.image} name={item.name} category={item.category} className="w-full h-full" />
+              {!item.available && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <span className="px-3 py-1 rounded-full bg-white text-ink-900 text-xs font-bold">Unavailable</span>
+                </div>
+              )}
+              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/90 text-ink-700 text-xs font-medium">
+                {item.category}
+              </span>
             </div>
-            <div className="p-4">
+            <div className="p-3">
               <div className="flex items-start gap-1.5">
                 <VegIndicator isVeg={item.isVeg} size={15} />
                 <h3 className="font-bold text-ink-900 text-sm leading-tight flex-1">{item.name}</h3>
@@ -269,6 +291,9 @@ export default function MenuManager() {
           setDraft={setDraft}
           currency={settings.currency}
           categories={categories}
+          onImageUpload={onImageUpload}
+          imageError={imageError}
+          compressingImage={compressingImage}
           onCancel={() => {
             setEditing(null);
             setCreating(false);
@@ -296,6 +321,9 @@ function ItemForm({
   setDraft,
   currency,
   categories,
+  onImageUpload,
+  imageError,
+  compressingImage,
   onCancel,
   onSave,
   valid,
@@ -304,12 +332,52 @@ function ItemForm({
   setDraft: (d: Omit<MenuItem, 'id'>) => void;
   currency: string;
   categories: string[];
+  onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  imageError: string | null;
+  compressingImage: boolean;
   onCancel: () => void;
   onSave: () => void;
   valid: boolean;
 }) {
   return (
     <div className="space-y-4">
+      {/* Image */}
+      <div>
+        <label className="block text-sm font-medium text-ink-700 mb-2">Item Image</label>
+        <div className="flex items-center gap-3">
+          <div className="w-20 h-20 rounded-xl overflow-hidden bg-ink-100 shrink-0 border border-ink-200">
+            {draft.image ? (
+              <img src={draft.image} alt="preview" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-ink-300 text-xs">No image</div>
+            )}
+          </div>
+          <label className="flex-1 cursor-pointer">
+            <span className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-ink-300 text-sm font-medium text-ink-600 hover:border-ink-400 hover:bg-ink-50 transition">
+              <Upload size={16} />
+              {compressingImage ? 'Processing…' : 'Upload Image'}
+            </span>
+            <input type="file" accept="image/*" className="hidden" onChange={onImageUpload} disabled={compressingImage} />
+          </label>
+          {draft.image && (
+            <button
+              onClick={() => setDraft({ ...draft, image: '' })}
+              className="p-2 rounded-lg bg-ink-100 text-ink-500 hover:bg-paprika-100 hover:text-paprika-600 transition"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        {imageError && <p className="text-xs text-paprika-600 mt-1.5">{imageError}</p>}
+        <input
+          type="text"
+          value={draft.image.startsWith('data:') ? '' : draft.image}
+          onChange={(e) => setDraft({ ...draft, image: e.target.value })}
+          placeholder="...or paste image URL"
+          className="w-full mt-2 px-3 py-2 rounded-lg border border-ink-200 text-sm focus:outline-none focus:ring-2 focus:ring-ink-900"
+        />
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-ink-700 mb-1.5">Name</label>
         <input
