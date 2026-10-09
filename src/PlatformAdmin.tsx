@@ -45,12 +45,31 @@ function money(value: unknown, currency = 'INR') {
 function downloadCafeReport(data: CafeExport) {
   const r = data.restaurant;
   const currency = r.currency || 'INR';
-  const sales = data.sales || [];
-  const revenue = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  const billCount = sales.length;
-  const itemsSold = sales.reduce((sum, sale) => sum + (sale.items || []).reduce((n, item) => n + Number(item.quantity || 0), 0), 0);
+  const allSales = data.sales || [];
+
+  // Cafe Reports opens on "Last 7 days" by default. Use the same local-day
+  // boundaries and the same settled-sales source (sales, not live orders).
+  const now = Date.now();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const rangeStart = today.getTime() - 6 * 86400000;
+  const rangeEnd = now + 1;
+  const reportSales = allSales.filter((sale) => {
+    const paidAt = Number(sale.paid_at || 0);
+    return paidAt >= rangeStart && paidAt < rangeEnd;
+  });
+
+  const revenue = reportSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const billCount = reportSales.length;
+  const averageBill = billCount ? revenue / billCount : 0;
+  const itemsSold = reportSales.reduce(
+    (sum, sale) => sum + (sale.items || []).reduce((n, item) => n + Number(item.quantity || 0), 0),
+    0,
+  );
+
   const overview = [
-    ['ScannBite Café Report'],
+    ['ScannBite Café Revenue Report'],
+    ['Revenue report period', 'Last 7 days (same default period as the café Reports page)'],
     ['Restaurant', r.name || ''],
     ['Restaurant URL slug', r.slug || ''],
     ['Account status', r.status || ''],
@@ -59,27 +78,80 @@ function downloadCafeReport(data: CafeExport) {
     ['Tax rate (%)', Number(r.tax_rate || 0)],
     ['Currency', currency],
     ['Menu items', Number(data.summary?.menu_items || 0)],
-    ['Orders recorded', Number(data.summary?.orders || 0)],
-    ['Completed bills / sales records', billCount],
-    ['Total recorded sales', money(revenue, currency)],
-    ['Average bill', money(billCount ? revenue / billCount : 0, currency)],
-    ['Items sold (from completed bills)', itemsSold],
+    ['Orders recorded (all statuses)', Number(data.summary?.orders || 0)],
+    ['Bills in last 7 days', billCount],
+    ['Revenue in last 7 days', money(revenue, currency)],
+    ['Average bill in last 7 days', money(averageBill, currency)],
+    ['Items sold in last 7 days', itemsSold],
+    ['All-time recorded bills', allSales.length],
+    ['All-time recorded sales', money(allSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0), currency)],
     ['Report generated', dateText(data.exported_at || new Date().toISOString())],
-    ['Note', 'This report contains readable café business data, not application code or technical database IDs.'],
+    ['Note', 'Revenue metrics match the café Reports page default: Last 7 days. All historical settled bills are also included in the All Sales Records sheet.'],
   ];
+
   const menuRows: unknown[][] = [['Item name', 'Category', 'Description', 'Price', 'Availability', 'Food type']];
-  (data.menu_items || []).forEach((item) => menuRows.push([item.name || '', item.category || '', item.description || '', Number(item.price || 0), item.available === false ? 'Unavailable' : 'Available', item.is_veg === false ? 'Non-vegetarian' : 'Vegetarian']));
+  (data.menu_items || []).forEach((item) => menuRows.push([
+    item.name || '', item.category || '', item.description || '', Number(item.price || 0),
+    item.available === false ? 'Unavailable' : 'Available', item.is_veg === false ? 'Non-vegetarian' : 'Vegetarian',
+  ]));
+
   const orderRows: unknown[][] = [['Order date', 'Table', 'Status', 'Items', 'Subtotal', 'Tax', 'Total', 'Customer note']];
   (data.orders || []).forEach((order) => {
     const items = (order.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} (${money(Number(item.price || 0), currency)} each${item.status ? `, ${item.status}` : ''})`).join('; ');
     orderRows.push([dateText(order.created_at), order.table_number ?? '', order.status || '', items, Number(order.subtotal || 0), Number(order.tax || 0), Number(order.total || 0), order.customer_note || '']);
   });
+
+  // Same calculations as Reports.tsx: revenue by paid date, item revenue and
+  // quantity, and payment-method totals. Unknown legacy methods stay unrecorded.
+  const paymentTotals: Record<string, { amount: number; count: number }> = {
+    cash: { amount: 0, count: 0 },
+    upi: { amount: 0, count: 0 },
+    card: { amount: 0, count: 0 },
+    unspecified: { amount: 0, count: 0 },
+  };
+  const itemTotals = new Map<string, { revenue: number; quantity: number }>();
+  const dayTotals = new Map<number, number>();
+
+  reportSales.forEach((sale) => {
+    const method = ['cash', 'upi', 'card'].includes(String(sale.payment_method)) ? String(sale.payment_method) : 'unspecified';
+    paymentTotals[method].amount += Number(sale.total || 0);
+    paymentTotals[method].count += 1;
+    const paidAt = Number(sale.paid_at || 0);
+    const day = new Date(paidAt);
+    day.setHours(0, 0, 0, 0);
+    dayTotals.set(day.getTime(), (dayTotals.get(day.getTime()) || 0) + Number(sale.total || 0));
+    (sale.items || []).forEach((item) => {
+      const name = item.name || 'Item';
+      const current = itemTotals.get(name) || { revenue: 0, quantity: 0 };
+      current.revenue += Number(item.price || 0) * Number(item.quantity || 0);
+      current.quantity += Number(item.quantity || 0);
+      itemTotals.set(name, current);
+    });
+  });
+
   const salesRows: unknown[][] = [['Bill date', 'Table', 'Items sold', 'Payment method', 'Subtotal', 'Tax', 'Total']];
-  sales.forEach((sale) => {
+  allSales.forEach((sale) => {
     const items = (sale.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} @ ${money(Number(item.price || 0), currency)}`).join('; ');
     salesRows.push([dateText(sale.paid_at), sale.table_number ?? '', items, sale.payment_method || 'Not recorded', Number(sale.subtotal || 0), Number(sale.tax || 0), Number(sale.total || 0)]);
   });
-  const workbook = `<?xml version=\"1.0\"?><Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">${xmlSheet('Overview', overview)}${xmlSheet('Menu', menuRows)}${xmlSheet('Orders', orderRows)}${xmlSheet('Sales Report', salesRows)}</Workbook>`;
+
+  const paymentRows: unknown[][] = [['Payment method', 'Revenue in last 7 days', 'Bill count']];
+  [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['unspecified', 'Not recorded']].forEach(([key, label]) => {
+    const value = paymentTotals[key];
+    if (key !== 'unspecified' || value.count > 0) paymentRows.push([label, Number(value.amount.toFixed(2)), value.count]);
+  });
+
+  const topItemRows: unknown[][] = [['Item name', 'Revenue in last 7 days', 'Quantity sold']];
+  Array.from(itemTotals.entries()).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 8).forEach(([name, values]) => {
+    topItemRows.push([name, Number(values.revenue.toFixed(2)), values.quantity]);
+  });
+
+  const dailyRows: unknown[][] = [['Date', 'Revenue']];
+  Array.from(dayTotals.entries()).sort((a, b) => a[0] - b[0]).forEach(([day, amount]) => {
+    dailyRows.push([new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), Number(amount.toFixed(2))]);
+  });
+
+  const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${xmlSheet('Overview', overview)}${xmlSheet('Menu', menuRows)}${xmlSheet('Orders', orderRows)}${xmlSheet('Revenue Report 7 Days', [['Metric', 'Value'], ['Revenue', money(revenue, currency)], ['Bills', billCount], ['Average Bill', money(averageBill, currency)], ['Items Sold', itemsSold], ['Period', 'Last 7 days'], ['Payment methods', 'See Payment Methods sheet'], ['Top items', 'See Top Items sheet'], ['Daily trend', 'See Daily Revenue sheet']])}${xmlSheet('Payment Methods', paymentRows)}${xmlSheet('Top Items', topItemRows)}${xmlSheet('Daily Revenue', dailyRows)}${xmlSheet('All Sales Records', salesRows)}</Workbook>`;
   const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -89,9 +161,8 @@ function downloadCafeReport(data: CafeExport) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
 
 async function checkPlatformAdmin(): Promise<boolean> {
   await supabase.auth.getSession();
