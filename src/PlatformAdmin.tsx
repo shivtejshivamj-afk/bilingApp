@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Mail, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2, Search, Users, CheckCircle2, Ban, ChevronDown } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Check, X, Clock, Store, RefreshCw, RotateCcw, Trash2, Search, Users, CheckCircle2, Ban, ChevronDown, Download } from 'lucide-react';
 import {
   fetchAllRestaurants,
   setRestaurantStatus,
@@ -152,6 +152,7 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended'>('all');
 
@@ -181,6 +182,32 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
       setActionError(e?.message || 'Failed to update restaurant status.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const downloadRestaurantBackup = async (restaurant: RestaurantRecord) => {
+    setExportingId(restaurant.id);
+    setActionError(null);
+    try {
+      const { data, error } = await supabase.rpc('platform_export_restaurant_data', { target_id: restaurant.id });
+      if (error) throw error;
+      if (!data) throw new Error('No backup data was returned.');
+
+      const safeName = (restaurant.settings.restaurantName || restaurant.slug || 'cafe')
+        .trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cafe';
+      const backup = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(backup);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `scannbite-${safeName}-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setActionError(e?.message || 'Could not download this café backup. Check the backup migration and permissions.');
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -288,6 +315,14 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
+                      onClick={() => downloadRestaurantBackup(r)}
+                      disabled={exportingId === r.id}
+                      className="px-3 py-2 rounded-lg bg-ink-100 text-ink-700 text-sm font-semibold hover:bg-ink-200 transition flex items-center gap-1.5 disabled:opacity-40"
+                      title="Download this café's backup report"
+                    >
+                      <Download size={15} /> {exportingId === r.id ? 'Preparing…' : 'Backup'}
+                    </button>
+                    <button
                       onClick={() => act(r.id, 'rejected')}
                       disabled={busyId === r.id}
                       className="px-3 py-2 rounded-lg bg-paprika-50 text-paprika-600 text-sm font-semibold hover:bg-paprika-100 transition flex items-center gap-1.5 disabled:opacity-40"
@@ -325,6 +360,14 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                   <p className="text-[11px] text-ink-400 font-mono truncate mt-1">ID: {r.id}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => downloadRestaurantBackup(r)}
+                    disabled={exportingId === r.id}
+                    className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
+                    title="Download this café's backup report"
+                  >
+                    <Download size={13} /> {exportingId === r.id ? 'Preparing…' : 'Backup'}
+                  </button>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                     r.status === 'approved'
                       ? 'bg-basil-100 text-basil-700'
