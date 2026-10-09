@@ -10,6 +10,89 @@ import {
 } from '@/lib/sync';
 import { supabase } from '@/lib/supabase';
 
+type CafeExport = {
+  exported_at?: string;
+  restaurant: { name?: string; slug?: string; status?: string; tax_rate?: number; currency?: string; table_count?: number; created_at?: string; categories?: string[] };
+  summary: { menu_items: number; orders: number; sales_records: number; sales_total: number };
+  menu_items: Array<{ name?: string; description?: string; category?: string; price?: number; available?: boolean; is_veg?: boolean }>;
+  orders: Array<{ table_number?: number; items?: Array<{ name?: string; quantity?: number; price?: number; status?: string }>; subtotal?: number; tax?: number; total?: number; status?: string; customer_note?: string; created_at?: string | number }>;
+  sales: Array<{ table_number?: number; items?: Array<{ name?: string; quantity?: number; price?: number }>; subtotal?: number; tax?: number; total?: number; payment_method?: string; paid_at?: number | string }>;
+};
+
+function xmlCell(value: unknown, type: 'String' | 'Number' = 'String') {
+  const text = value == null ? '' : String(value);
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');
+  return `<Cell><Data ss:Type=\"${type}\">${escaped}</Data></Cell>`;
+}
+
+function xmlSheet(name: string, rows: unknown[][]) {
+  const safeRows = rows.map((row, index) => `<Row>${row.map((value) => xmlCell(value, index > 0 && typeof value === 'number' ? 'Number' : 'String')).join('')}</Row>`).join('');
+  return `<Worksheet ss:Name=\"${name}\"><Table>${safeRows}</Table></Worksheet>`;
+}
+
+function dateText(value: unknown) {
+  if (value == null || value === '') return '';
+  const n = typeof value === 'number' ? value : Number(value);
+  const date = Number.isFinite(n) && n > 0 ? new Date(n) : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function money(value: unknown, currency = 'INR') {
+  const n = Number(value ?? 0);
+  return `${currency} ${n.toFixed(2)}`;
+}
+
+function downloadCafeReport(data: CafeExport) {
+  const r = data.restaurant;
+  const currency = r.currency || 'INR';
+  const sales = data.sales || [];
+  const revenue = sales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const billCount = sales.length;
+  const itemsSold = sales.reduce((sum, sale) => sum + (sale.items || []).reduce((n, item) => n + Number(item.quantity || 0), 0), 0);
+  const overview = [
+    ['ScannBite Café Report'],
+    ['Restaurant', r.name || ''],
+    ['Restaurant URL slug', r.slug || ''],
+    ['Account status', r.status || ''],
+    ['Created on', dateText(r.created_at)],
+    ['Number of tables', Number(r.table_count || 0)],
+    ['Tax rate (%)', Number(r.tax_rate || 0)],
+    ['Currency', currency],
+    ['Menu items', Number(data.summary?.menu_items || 0)],
+    ['Orders recorded', Number(data.summary?.orders || 0)],
+    ['Completed bills / sales records', billCount],
+    ['Total recorded sales', money(revenue, currency)],
+    ['Average bill', money(billCount ? revenue / billCount : 0, currency)],
+    ['Items sold (from completed bills)', itemsSold],
+    ['Report generated', dateText(data.exported_at || new Date().toISOString())],
+    ['Note', 'This report contains readable café business data, not application code or technical database IDs.'],
+  ];
+  const menuRows: unknown[][] = [['Item name', 'Category', 'Description', 'Price', 'Availability', 'Food type']];
+  (data.menu_items || []).forEach((item) => menuRows.push([item.name || '', item.category || '', item.description || '', Number(item.price || 0), item.available === false ? 'Unavailable' : 'Available', item.is_veg === false ? 'Non-vegetarian' : 'Vegetarian']));
+  const orderRows: unknown[][] = [['Order date', 'Table', 'Status', 'Items', 'Subtotal', 'Tax', 'Total', 'Customer note']];
+  (data.orders || []).forEach((order) => {
+    const items = (order.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} (${money(Number(item.price || 0), currency)} each${item.status ? `, ${item.status}` : ''})`).join('; ');
+    orderRows.push([dateText(order.created_at), order.table_number ?? '', order.status || '', items, Number(order.subtotal || 0), Number(order.tax || 0), Number(order.total || 0), order.customer_note || '']);
+  });
+  const salesRows: unknown[][] = [['Bill date', 'Table', 'Items sold', 'Payment method', 'Subtotal', 'Tax', 'Total']];
+  sales.forEach((sale) => {
+    const items = (sale.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} @ ${money(Number(item.price || 0), currency)}`).join('; ');
+    salesRows.push([dateText(sale.paid_at), sale.table_number ?? '', items, sale.payment_method || 'Not recorded', Number(sale.subtotal || 0), Number(sale.tax || 0), Number(sale.total || 0)]);
+  });
+  const workbook = `<?xml version=\"1.0\"?><Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">${xmlSheet('Overview', overview)}${xmlSheet('Menu', menuRows)}${xmlSheet('Orders', orderRows)}${xmlSheet('Sales Report', salesRows)}</Workbook>`;
+  const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fileName = (r.name || 'Cafe').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'Cafe';
+  a.href = url;
+  a.download = `${fileName}-ScannBite-Report.xls`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+
 async function checkPlatformAdmin(): Promise<boolean> {
   await supabase.auth.getSession();
   const { data, error } = await supabase.rpc('is_platform_admin');
@@ -153,6 +236,21 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const exportCafe = async (restaurant: RestaurantRecord) => {
+    setExportingId(restaurant.id);
+    setActionError(null);
+    try {
+      const { data, error } = await supabase.rpc('platform_export_restaurant_data', { target_id: restaurant.id });
+      if (error) throw error;
+      if (!data || !data.restaurant) throw new Error('No café report data was returned.');
+      downloadCafeReport(data as CafeExport);
+    } catch (e: any) {
+      setActionError(e?.message || 'Could not download the café report.');
+    } finally {
+      setExportingId(null);
+    }
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended'>('all');
 
@@ -182,32 +280,6 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
       setActionError(e?.message || 'Failed to update restaurant status.');
     } finally {
       setBusyId(null);
-    }
-  };
-
-  const downloadRestaurantBackup = async (restaurant: RestaurantRecord) => {
-    setExportingId(restaurant.id);
-    setActionError(null);
-    try {
-      const { data, error } = await supabase.rpc('platform_export_restaurant_data', { target_id: restaurant.id });
-      if (error) throw error;
-      if (!data) throw new Error('No backup data was returned.');
-
-      const safeName = (restaurant.settings.restaurantName || restaurant.slug || 'cafe')
-        .trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cafe';
-      const backup = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(backup);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `scannbite-${safeName}-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setActionError(e?.message || 'Could not download this café backup. Check the backup migration and permissions.');
-    } finally {
-      setExportingId(null);
     }
   };
 
@@ -315,12 +387,13 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
-                      onClick={() => downloadRestaurantBackup(r)}
+                      onClick={() => exportCafe(r)}
                       disabled={exportingId === r.id}
-                      className="px-3 py-2 rounded-lg bg-ink-100 text-ink-700 text-sm font-semibold hover:bg-ink-200 transition flex items-center gap-1.5 disabled:opacity-40"
-                      title="Download this café's backup report"
+                      className="px-3 py-2 rounded-lg bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
+                      title="Download a readable Excel café report"
                     >
-                      <Download size={15} /> {exportingId === r.id ? 'Preparing…' : 'Backup'}
+                      {exportingId === r.id ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+                      {exportingId === r.id ? 'Preparing…' : 'Download Report'}
                     </button>
                     <button
                       onClick={() => act(r.id, 'rejected')}
@@ -361,12 +434,13 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => downloadRestaurantBackup(r)}
+                    onClick={() => exportCafe(r)}
                     disabled={exportingId === r.id}
-                    className="px-2.5 py-1.5 rounded-lg bg-basil-50 text-basil-700 text-xs font-semibold hover:bg-basil-100 transition flex items-center gap-1 disabled:opacity-40"
-                    title="Download this café's backup report"
+                    className="px-2.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
+                    title="Download a readable Excel café report"
                   >
-                    <Download size={13} /> {exportingId === r.id ? 'Preparing…' : 'Backup'}
+                    {exportingId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+                    {exportingId === r.id ? 'Preparing…' : 'Download Report'}
                   </button>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                     r.status === 'approved'
