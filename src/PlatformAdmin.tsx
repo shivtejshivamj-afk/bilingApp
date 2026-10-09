@@ -19,150 +19,330 @@ type CafeExport = {
   sales: Array<{ table_number?: number; items?: Array<{ name?: string; quantity?: number; price?: number }>; subtotal?: number; tax?: number; total?: number; payment_method?: string; paid_at?: number | string }>;
 };
 
-function xmlCell(value: unknown, type: 'String' | 'Number' = 'String') {
-  const text = value == null ? '' : String(value);
-  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&apos;');
-  return `<Cell><Data ss:Type=\"${type}\">${escaped}</Data></Cell>`;
-}
-
-function xmlSheet(name: string, rows: unknown[][]) {
-  const safeRows = rows.map((row, index) => `<Row>${row.map((value) => xmlCell(value, index > 0 && typeof value === 'number' ? 'Number' : 'String')).join('')}</Row>`).join('');
-  return `<Worksheet ss:Name=\"${name}\"><Table>${safeRows}</Table></Worksheet>`;
+function money(value: unknown, currency = '₹') {
+  const n = Number(value ?? 0);
+  return `${currency}${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
 function dateText(value: unknown) {
   if (value == null || value === '') return '';
   const n = typeof value === 'number' ? value : Number(value);
   const date = Number.isFinite(n) && n > 0 ? new Date(n) : new Date(String(value));
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function money(value: unknown, currency = 'INR') {
-  const n = Number(value ?? 0);
-  return `${currency} ${n.toFixed(2)}`;
+function dateTimeText(value: unknown) {
+  if (value == null || value === '') return '';
+  const n = typeof value === 'number' ? value : Number(value);
+  const date = Number.isFinite(n) && n > 0 ? new Date(n) : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function downloadCafeReport(data: CafeExport) {
-  const r = data.restaurant;
-  const currency = r.currency || 'INR';
-  const allSales = data.sales || [];
+function esc(s: unknown) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-  // Cafe Reports opens on "Last 7 days" by default. Use the same local-day
-  // boundaries and the same settled-sales source (sales, not live orders).
-  const now = Date.now();
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const rangeStart = today.getTime() - 6 * 86400000;
-  const rangeEnd = now + 1;
-  const reportSales = allSales.filter((sale) => {
-    const paidAt = Number(sale.paid_at || 0);
-    return paidAt >= rangeStart && paidAt < rangeEnd;
-  });
+const PAYMENT_LABELS: Record<string, string> = { cash: 'Cash', upi: 'UPI', card: 'Card' };
+const PAYMENT_COLORS: Record<string, string> = { cash: '#5a8a3a', upi: '#d98a3d', card: '#2b2622', unspecified: '#c9c2b4' };
 
-  const revenue = reportSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  const billCount = reportSales.length;
-  const averageBill = billCount ? revenue / billCount : 0;
-  const itemsSold = reportSales.reduce(
-    (sum, sale) => sum + (sale.items || []).reduce((n, item) => n + Number(item.quantity || 0), 0),
-    0,
-  );
-
-  const overview = [
-    ['ScannBite Café Revenue Report'],
-    ['Revenue report period', 'Last 7 days (same default period as the café Reports page)'],
-    ['Restaurant', r.name || ''],
-    ['Restaurant URL slug', r.slug || ''],
-    ['Account status', r.status || ''],
-    ['Created on', dateText(r.created_at)],
-    ['Number of tables', Number(r.table_count || 0)],
-    ['Tax rate (%)', Number(r.tax_rate || 0)],
-    ['Currency', currency],
-    ['Menu items', Number(data.summary?.menu_items || 0)],
-    ['Orders recorded (all statuses)', Number(data.summary?.orders || 0)],
-    ['Bills in last 7 days', billCount],
-    ['Revenue in last 7 days', money(revenue, currency)],
-    ['Average bill in last 7 days', money(averageBill, currency)],
-    ['Items sold in last 7 days', itemsSold],
-    ['All-time recorded bills', allSales.length],
-    ['All-time recorded sales', money(allSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0), currency)],
-    ['Report generated', dateText(data.exported_at || new Date().toISOString())],
-    ['Note', 'Revenue metrics match the café Reports page default: Last 7 days. All historical settled bills are also included in the All Sales Records sheet.'],
-  ];
-
-  const menuRows: unknown[][] = [['Item name', 'Category', 'Description', 'Price', 'Availability', 'Food type']];
-  (data.menu_items || []).forEach((item) => menuRows.push([
-    item.name || '', item.category || '', item.description || '', Number(item.price || 0),
-    item.available === false ? 'Unavailable' : 'Available', item.is_veg === false ? 'Non-vegetarian' : 'Vegetarian',
-  ]));
-
-  const orderRows: unknown[][] = [['Order date', 'Table', 'Status', 'Items', 'Subtotal', 'Tax', 'Total', 'Customer note']];
-  (data.orders || []).forEach((order) => {
-    const items = (order.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} (${money(Number(item.price || 0), currency)} each${item.status ? `, ${item.status}` : ''})`).join('; ');
-    orderRows.push([dateText(order.created_at), order.table_number ?? '', order.status || '', items, Number(order.subtotal || 0), Number(order.tax || 0), Number(order.total || 0), order.customer_note || '']);
-  });
-
-  // Same calculations as Reports.tsx: revenue by paid date, item revenue and
-  // quantity, and payment-method totals. Unknown legacy methods stay unrecorded.
-  const paymentTotals: Record<string, { amount: number; count: number }> = {
-    cash: { amount: 0, count: 0 },
-    upi: { amount: 0, count: 0 },
-    card: { amount: 0, count: 0 },
-    unspecified: { amount: 0, count: 0 },
-  };
-  const itemTotals = new Map<string, { revenue: number; quantity: number }>();
-  const dayTotals = new Map<number, number>();
-
-  reportSales.forEach((sale) => {
-    const method = ['cash', 'upi', 'card'].includes(String(sale.payment_method)) ? String(sale.payment_method) : 'unspecified';
-    paymentTotals[method].amount += Number(sale.total || 0);
-    paymentTotals[method].count += 1;
-    const paidAt = Number(sale.paid_at || 0);
-    const day = new Date(paidAt);
-    day.setHours(0, 0, 0, 0);
-    dayTotals.set(day.getTime(), (dayTotals.get(day.getTime()) || 0) + Number(sale.total || 0));
-    (sale.items || []).forEach((item) => {
-      const name = item.name || 'Item';
-      const current = itemTotals.get(name) || { revenue: 0, quantity: 0 };
-      current.revenue += Number(item.price || 0) * Number(item.quantity || 0);
-      current.quantity += Number(item.quantity || 0);
-      itemTotals.set(name, current);
+// Fetches the app's own logo and turns it into a data: URL, so the printed
+// report carries the ScannBite mark without the HTML depending on the
+// iframe being able to resolve a relative/site-root path (it can't — the
+// iframe document is written in-memory, not navigated to a real URL). If
+// the fetch fails for any reason, the report still renders fine without it.
+async function getLogoDataUrl(): Promise<string | null> {
+  try {
+    const res = await fetch('/logo192.png');
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
     });
-  });
-
-  const salesRows: unknown[][] = [['Bill date', 'Table', 'Items sold', 'Payment method', 'Subtotal', 'Tax', 'Total']];
-  allSales.forEach((sale) => {
-    const items = (sale.items || []).map((item) => `${item.name || 'Item'} x${Number(item.quantity || 0)} @ ${money(Number(item.price || 0), currency)}`).join('; ');
-    salesRows.push([dateText(sale.paid_at), sale.table_number ?? '', items, sale.payment_method || 'Not recorded', Number(sale.subtotal || 0), Number(sale.tax || 0), Number(sale.total || 0)]);
-  });
-
-  const paymentRows: unknown[][] = [['Payment method', 'Revenue in last 7 days', 'Bill count']];
-  [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['unspecified', 'Not recorded']].forEach(([key, label]) => {
-    const value = paymentTotals[key];
-    if (key !== 'unspecified' || value.count > 0) paymentRows.push([label, Number(value.amount.toFixed(2)), value.count]);
-  });
-
-  const topItemRows: unknown[][] = [['Item name', 'Revenue in last 7 days', 'Quantity sold']];
-  Array.from(itemTotals.entries()).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 8).forEach(([name, values]) => {
-    topItemRows.push([name, Number(values.revenue.toFixed(2)), values.quantity]);
-  });
-
-  const dailyRows: unknown[][] = [['Date', 'Revenue']];
-  Array.from(dayTotals.entries()).sort((a, b) => a[0] - b[0]).forEach(([day, amount]) => {
-    dailyRows.push([new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), Number(amount.toFixed(2))]);
-  });
-
-  const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${xmlSheet('Overview', overview)}${xmlSheet('Menu', menuRows)}${xmlSheet('Orders', orderRows)}${xmlSheet('Revenue Report 7 Days', [['Metric', 'Value'], ['Revenue', money(revenue, currency)], ['Bills', billCount], ['Average Bill', money(averageBill, currency)], ['Items Sold', itemsSold], ['Period', 'Last 7 days'], ['Payment methods', 'See Payment Methods sheet'], ['Top items', 'See Top Items sheet'], ['Daily trend', 'See Daily Revenue sheet']])}${xmlSheet('Payment Methods', paymentRows)}${xmlSheet('Top Items', topItemRows)}${xmlSheet('Daily Revenue', dailyRows)}${xmlSheet('All Sales Records', salesRows)}</Workbook>`;
-  const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const fileName = (r.name || 'Cafe').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'Cafe';
-  a.href = url;
-  a.download = `${fileName}-ScannBite-Report.xls`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch {
+    return null;
+  }
 }
+
+// Builds the printable café backup report as a single self-contained HTML
+// page. This is handed to the browser's own print dialog (printCafeReport,
+// below) rather than built with a PDF library — "Save as PDF" in that
+// dialog produces the actual PDF file, with zero extra dependencies.
+function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
+  const r = data.restaurant;
+  const currency = r.currency || '₹';
+  const sales = data.sales || [];
+  const revenue = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
+  const billCount = sales.length;
+  const avgBill = billCount ? revenue / billCount : 0;
+  const itemsSold = sales.reduce((sum, s) => sum + (s.items || []).reduce((n, i) => n + Number(i.quantity || 0), 0), 0);
+
+  const paymentTotals: Record<string, number> = { cash: 0, upi: 0, card: 0, unspecified: 0 };
+  const paymentCounts: Record<string, number> = { cash: 0, upi: 0, card: 0, unspecified: 0 };
+  sales.forEach((s) => {
+    const bucket = s.payment_method && PAYMENT_LABELS[s.payment_method] ? s.payment_method : 'unspecified';
+    paymentTotals[bucket] += Number(s.total || 0);
+    paymentCounts[bucket] += 1;
+  });
+
+  const menuByCategory: Record<string, CafeExport['menu_items']> = {};
+  (data.menu_items || []).forEach((item) => {
+    const cat = item.category || 'Other';
+    (menuByCategory[cat] = menuByCategory[cat] || []).push(item);
+  });
+
+  const sortedSales = [...sales].sort((a, b) => Number(b.paid_at || 0) - Number(a.paid_at || 0));
+
+  const menuHtml = Object.entries(menuByCategory).map(([cat, items]) => `
+    <div class="menu-cat">
+      <h3>${esc(cat)}</h3>
+      <table class="menu-table">
+        <thead><tr><th>Item</th><th>Description</th><th class="num">Price</th><th>Type</th><th>Status</th></tr></thead>
+        <tbody>
+          ${items.map((item) => `
+            <tr>
+              <td class="item-name">${esc(item.name)}</td>
+              <td class="muted">${esc(item.description || '')}</td>
+              <td class="num">${money(item.price, currency)}</td>
+              <td><span class="tag ${item.is_veg === false ? 'tag-nonveg' : 'tag-veg'}">${item.is_veg === false ? 'Non-veg' : 'Veg'}</span></td>
+              <td><span class="tag ${item.available === false ? 'tag-off' : 'tag-on'}">${item.available === false ? 'Unavailable' : 'Available'}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`).join('');
+
+  const salesHtml = sortedSales.map((s) => {
+    const items = (s.items || []).map((i) => `${esc(i.name)} ×${Number(i.quantity || 0)}`).join(', ');
+    const method = s.payment_method && PAYMENT_LABELS[s.payment_method] ? PAYMENT_LABELS[s.payment_method] : 'Not recorded';
+    return `
+      <tr>
+        <td class="muted">${dateTimeText(s.paid_at)}</td>
+        <td>${esc(s.table_number ?? '')}</td>
+        <td class="muted">${items}</td>
+        <td><span class="pay-chip pay-${s.payment_method || 'unspecified'}">${method}</span></td>
+        <td class="num strong">${money(s.total, currency)}</td>
+      </tr>`;
+  }).join('');
+
+  const paymentTilesHtml = Object.keys(paymentTotals)
+    .filter((k) => k !== 'unspecified' || paymentCounts.unspecified > 0)
+    .map((k) => {
+      const pct = revenue > 0 ? Math.round((paymentTotals[k] / revenue) * 100) : 0;
+      const label = k === 'unspecified' ? 'Not recorded' : PAYMENT_LABELS[k];
+      return `
+        <div class="pay-tile">
+          <div class="pay-dot" style="background:${PAYMENT_COLORS[k]}"></div>
+          <div class="pay-tile-main">
+            <div class="pay-tile-label">${label}</div>
+            <div class="pay-tile-amount">${money(paymentTotals[k], currency)}</div>
+            <div class="pay-tile-sub">${pct}% · ${paymentCounts[k]} ${paymentCounts[k] === 1 ? 'bill' : 'bills'}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+  const barSegments = Object.keys(paymentTotals)
+    .filter((k) => paymentTotals[k] > 0)
+    .map((k) => `<div style="flex:${paymentTotals[k]};background:${PAYMENT_COLORS[k]}"></div>`)
+    .join('');
+
+  const logoImg = logoDataUrl ? `<img src="${logoDataUrl}" />` : '';
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${esc(r.name)} — ScannBite backup report</title>
+<style>
+  @page { margin: 32px 40px 46px; size: A4; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #2b2622;
+    background: #ffffff;
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 18px; border-bottom: 3px solid #1C1917; margin-bottom: 22px;
+  }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand img { width:40px; height:40px; }
+  .brand-name { font-size: 15px; font-weight:700; color:#1C1917; letter-spacing:0.2px; }
+  .brand-sub { font-size: 9px; color:#8a8378; text-transform:uppercase; letter-spacing:0.6px; margin-top:1px; }
+  .header-right { text-align:right; }
+  .alltime-badge {
+    display:inline-block; background:#1C1917; color:#F5EFE6;
+    font-size:9px; font-weight:700; letter-spacing:0.4px;
+    padding:4px 10px; border-radius:100px; text-transform:uppercase;
+  }
+  .header-right .gendate { font-size:9px; color:#8a8378; margin-top:5px; }
+
+  /* Title block */
+  .title-row { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom: 20px; }
+  .restaurant-name { font-size: 26px; font-weight: 700; color:#1C1917; }
+  .restaurant-meta { font-size:10px; color:#6b655b; margin-top:4px; }
+  .status-chip {
+    display:inline-block; padding:4px 11px; border-radius:100px; font-size:9px; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.3px;
+    background:#e8f0e2; color:#4a7230;
+  }
+
+  .note-box {
+    background:#f7f4ee; border:1px solid #e8e2d4; border-left:3px solid #c4531f;
+    border-radius:6px; padding:10px 14px; font-size:9.5px; color:#5c564c; margin-bottom:22px;
+  }
+  .note-box b { color:#2b2622; }
+
+  /* Stat grid */
+  .stat-grid { display:flex; gap:10px; margin-bottom: 24px; }
+  .stat-card {
+    flex:1; border:1px solid #e8e2d4; border-radius:10px; padding:12px 14px;
+  }
+  .stat-label { font-size:8.5px; color:#8a8378; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; }
+  .stat-value { font-size:18px; font-weight:700; color:#1C1917; margin-top:4px; }
+
+  /* Section heading */
+  .section-title {
+    font-size:13px; font-weight:700; color:#1C1917; margin: 26px 0 12px;
+    padding-bottom:6px; border-bottom: 1.5px solid #e8e2d4;
+  }
+
+  /* Payment methods */
+  .pay-bar { display:flex; height:9px; border-radius:5px; overflow:hidden; background:#efeae0; margin-bottom:12px; }
+  .pay-tiles { display:flex; gap:10px; }
+  .pay-tile { flex:1; display:flex; align-items:flex-start; gap:8px; border:1px solid #e8e2d4; border-radius:8px; padding:10px 12px; }
+  .pay-dot { width:9px; height:9px; border-radius:50%; margin-top:3px; flex-shrink:0; }
+  .pay-tile-label { font-size:9px; color:#6b655b; font-weight:600; }
+  .pay-tile-amount { font-size:14px; font-weight:700; color:#1C1917; margin-top:1px; }
+  .pay-tile-sub { font-size:8.5px; color:#9c9284; margin-top:1px; }
+
+  /* Menu */
+  .menu-cat { margin-bottom: 14px; break-inside: avoid; }
+  .menu-cat h3 { font-size:11px; font-weight:700; color:#c4531f; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px; }
+  table { width:100%; border-collapse: collapse; }
+  .menu-table th {
+    text-align:left; font-size:8.5px; color:#8a8378; text-transform:uppercase; letter-spacing:0.3px;
+    padding:5px 8px; border-bottom:1.5px solid #e8e2d4; font-weight:700;
+  }
+  .menu-table td { padding:6px 8px; border-bottom:1px solid #f0ece2; font-size:9.5px; }
+  .item-name { font-weight:600; color:#1C1917; }
+  .muted { color:#6b655b; }
+  .num { text-align:right; font-variant-numeric: tabular-nums; }
+  .strong { font-weight:700; color:#1C1917; }
+  .tag { display:inline-block; padding:2px 7px; border-radius:100px; font-size:8px; font-weight:700; }
+  .tag-veg { background:#e8f0e2; color:#4a7230; }
+  .tag-nonveg { background:#fbe7de; color:#a8441f; }
+  .tag-on { background:#e8f0e2; color:#4a7230; }
+  .tag-off { background:#efeae0; color:#8a8378; }
+
+  /* Sales table */
+  .sales-table thead { display: table-header-group; }
+  .sales-table tr { break-inside: avoid; }
+  .sales-table th {
+    text-align:left; font-size:8.5px; color:#8a8378; text-transform:uppercase; letter-spacing:0.3px;
+    padding:6px 8px; border-bottom:1.5px solid #e8e2d4; font-weight:700;
+    background:#fbf9f5;
+  }
+  .sales-table td { padding:7px 8px; border-bottom:1px solid #f0ece2; font-size:9.5px; }
+  .pay-chip { display:inline-block; padding:2px 8px; border-radius:100px; font-size:8px; font-weight:700; color:#fff; }
+  .pay-cash { background:#5a8a3a; }
+  .pay-upi { background:#d98a3d; }
+  .pay-card { background:#2b2622; }
+  .pay-unspecified, .pay-undefined { background:#c9c2b4; }
+
+  .footer {
+    position: fixed; bottom: 0; left:0; right:0;
+    padding-top: 8px; font-size:8px; color:#9c9284;
+    display:flex; justify-content:space-between; border-top:1px solid #e8e2d4;
+  }
+</style>
+</head>
+<body>
+  <div>
+    <div class="header">
+      <div class="brand">
+        ${logoImg}
+        <div>
+          <div class="brand-name">ScannBite</div>
+          <div class="brand-sub">Café Backup Report</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="alltime-badge">All-time report</span>
+        <div class="gendate">Generated ${dateTimeText(data.exported_at || new Date().toISOString())}</div>
+      </div>
+    </div>
+
+    <div class="title-row">
+      <div>
+        <div class="restaurant-name">${esc(r.name)}</div>
+        <div class="restaurant-meta">${esc(r.table_count || 0)} tables · ${esc(r.tax_rate || 0)}% tax · On ScannBite since ${dateText(r.created_at)}</div>
+      </div>
+      <div class="status-chip">${esc(r.status || '')}</div>
+    </div>
+
+    <div class="note-box">
+      <b>What this report covers:</b> every bill ever recorded for this café on ScannBite, start to finish — not a recent window. If you're comparing this to the café's own Reports page, set that page's date filter to "All time" first, since it defaults to the last 7 days.
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Lifetime Revenue</div><div class="stat-value">${money(revenue, currency)}</div></div>
+      <div class="stat-card"><div class="stat-label">Completed Bills</div><div class="stat-value">${billCount}</div></div>
+      <div class="stat-card"><div class="stat-label">Average Bill</div><div class="stat-value">${money(avgBill, currency)}</div></div>
+      <div class="stat-card"><div class="stat-label">Items Sold</div><div class="stat-value">${itemsSold}</div></div>
+    </div>
+
+    <div class="section-title">Payment Methods (all-time)</div>
+    <div class="pay-bar">${barSegments}</div>
+    <div class="pay-tiles">${paymentTilesHtml}</div>
+
+    <div class="section-title">Menu (${data.summary?.menu_items ?? (data.menu_items || []).length} items)</div>
+    ${menuHtml || '<p class="muted">No menu items recorded.</p>'}
+
+    <div class="section-title">Sales History (${billCount} bills)</div>
+    <table class="sales-table">
+      <thead><tr><th>Date &amp; time</th><th>Table</th><th>Items</th><th>Payment</th><th class="num">Total</th></tr></thead>
+      <tbody>${salesHtml || '<tr><td colspan="5" class="muted">No completed bills recorded.</td></tr>'}</tbody>
+    </table>
+  </div>
+  <div class="footer">
+    <span>ScannBite — café ordering &amp; billing</span>
+    <span>Backup report for ${esc(r.name)} · keep this if the café leaves the platform</span>
+  </div>
+</body>
+</html>`;
+}
+
+// Renders the report into a hidden iframe and opens the browser's print
+// dialog on it — the same pattern this app already uses for bill receipts
+// (see TableManagement.tsx). The admin picks "Save as PDF" there to get the
+// actual file; this avoids adding a PDF-generation library as a dependency.
+async function printCafeReport(data: CafeExport) {
+  const logoDataUrl = await getLogoDataUrl();
+  const html = buildCafeReportHtml(data, logoDataUrl);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+  document.body.appendChild(iframe);
+  const iDoc = iframe.contentWindow?.document;
+  if (!iDoc) {
+    document.body.removeChild(iframe);
+    throw new Error('Could not open the print preview.');
+  }
+  iDoc.open();
+  iDoc.write(html);
+  iDoc.close();
+  setTimeout(() => {
+    iframe.contentWindow?.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 300);
+}
+
 
 async function checkPlatformAdmin(): Promise<boolean> {
   await supabase.auth.getSession();
@@ -315,7 +495,7 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
       const { data, error } = await supabase.rpc('platform_export_restaurant_data', { target_id: restaurant.id });
       if (error) throw error;
       if (!data || !data.restaurant) throw new Error('No café report data was returned.');
-      downloadCafeReport(data as CafeExport);
+      await printCafeReport(data as CafeExport);
     } catch (e: any) {
       setActionError(e?.message || 'Could not download the café report.');
     } finally {
@@ -461,7 +641,7 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                       onClick={() => exportCafe(r)}
                       disabled={exportingId === r.id}
                       className="px-3 py-2 rounded-lg bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
-                      title="Download a readable Excel café report"
+                      title="Print or save a PDF café backup report"
                     >
                       {exportingId === r.id ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
                       {exportingId === r.id ? 'Preparing…' : 'Download Report'}
@@ -508,7 +688,7 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                     onClick={() => exportCafe(r)}
                     disabled={exportingId === r.id}
                     className="px-2.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
-                    title="Download a readable Excel café report"
+                    title="Print or save a PDF café backup report"
                   >
                     {exportingId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
                     {exportingId === r.id ? 'Preparing…' : 'Download Report'}
