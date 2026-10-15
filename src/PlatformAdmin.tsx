@@ -45,6 +45,115 @@ function esc(s: unknown) {
 const PAYMENT_LABELS: Record<string, string> = { cash: 'Cash', upi: 'UPI', card: 'Card' };
 const PAYMENT_COLORS: Record<string, string> = { cash: '#5a8a3a', upi: '#d98a3d', card: '#2b2622', unspecified: '#c9c2b4' };
 
+// The windows a café backup report can be downloaded for. "custom" pairs
+// with a CustomBounds (millisecond start/end, inclusive) chosen in the
+// dropdown's date pickers.
+type ReportRange = 'today' | 'month' | 'all' | 'custom';
+type CustomBounds = { start: number; end: number };
+
+const REPORT_RANGE_OPTIONS: { key: ReportRange; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'month', label: 'This month' },
+  { key: 'all', label: 'All time' },
+];
+
+// Native <input type="date"> gives/takes "YYYY-MM-DD" strings — these two
+// helpers convert that to/from a local-midnight timestamp (same approach
+// Reports.tsx uses for its own custom date range).
+function toDateInputValue(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function fromDateInputValue(value: string): number {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime();
+}
+
+// sale.paid_at can arrive as an epoch-ms number or an ISO string depending
+// on how old the row is — same tolerant parsing as dateText/dateTimeText
+// above, just returning the raw millisecond value for comparison.
+function toMillis(value: unknown): number {
+  if (value == null || value === '') return 0;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (Number.isFinite(n) && n > 0) return n;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function startOfDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function startOfMonth(ts: number): number {
+  const d = new Date(ts);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// Filters a café's sales down to the selected window before the report is
+// built. "today"/"month" use the admin's own local clock, same as the
+// café's own Reports page does for its "Today" / date filters. "custom"
+// uses the inclusive start/end millis chosen in the date pickers.
+function filterSalesByRange(sales: CafeExport['sales'], range: ReportRange, bounds?: CustomBounds): CafeExport['sales'] {
+  if (range === 'all') return sales;
+  if (range === 'custom') {
+    if (!bounds) return sales;
+    return sales.filter((s) => {
+      const t = toMillis(s.paid_at);
+      return t >= bounds.start && t <= bounds.end;
+    });
+  }
+  const now = Date.now();
+  const start = range === 'today' ? startOfDay(now) : startOfMonth(now);
+  return sales.filter((s) => toMillis(s.paid_at) >= start);
+}
+
+// Text that changes depending on which window the report covers — the
+// badge, the explanatory note, and the revenue stat's label.
+function reportRangeCopy(range: ReportRange, bounds?: CustomBounds) {
+  const now = new Date();
+  if (range === 'today') {
+    return {
+      badge: "Today's report",
+      note: `<b>What this report covers:</b> only bills completed today (${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}), from midnight to now. Download the "All time" report instead for this café's full history.`,
+      revenueLabel: "Today's Revenue",
+      sectionSuffix: '(today)',
+    };
+  }
+  if (range === 'month') {
+    return {
+      badge: "This month's report",
+      note: `<b>What this report covers:</b> bills completed this calendar month (${now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}), from the 1st to now. Download the "All time" report instead for this café's full history.`,
+      revenueLabel: "This Month's Revenue",
+      sectionSuffix: '(this month)',
+    };
+  }
+  if (range === 'custom' && bounds) {
+    const fromText = new Date(bounds.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const toText = new Date(bounds.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const sameDay = fromText === toText;
+    return {
+      badge: sameDay ? `Report — ${fromText}` : 'Custom range report',
+      note: `<b>What this report covers:</b> bills completed ${sameDay ? `on ${fromText}` : `from ${fromText} to ${toText}`}. Download the "All time" report instead for this café's full history.`,
+      revenueLabel: 'Revenue (selected range)',
+      sectionSuffix: sameDay ? `(${fromText})` : `(${fromText} – ${toText})`,
+    };
+  }
+  return {
+    badge: 'All-time report',
+    note: `<b>What this report covers:</b> every bill ever recorded for this café on ScannBite, start to finish — not a recent window. If you're comparing this to the café's own Reports page, set that page's date filter to "All time" first, since it defaults to the last 7 days.`,
+    revenueLabel: 'Lifetime Revenue',
+    sectionSuffix: '(all-time)',
+  };
+}
+
 // Fetches the app's own logo and turns it into a data: URL, so the printed
 // report carries the ScannBite mark without the HTML depending on the
 // iframe being able to resolve a relative/site-root path (it can't — the
@@ -70,10 +179,11 @@ async function getLogoDataUrl(): Promise<string | null> {
 // page. This is handed to the browser's own print dialog (printCafeReport,
 // below) rather than built with a PDF library — "Save as PDF" in that
 // dialog produces the actual PDF file, with zero extra dependencies.
-function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
+function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null, range: ReportRange, bounds?: CustomBounds) {
   const r = data.restaurant;
   const currency = r.currency || '₹';
   const sales = data.sales || [];
+  const copy = reportRangeCopy(range, bounds);
   const revenue = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
   const billCount = sales.length;
   const avgBill = billCount ? revenue / billCount : 0;
@@ -153,7 +263,7 @@ function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>${esc(r.name)} — ScannBite backup report</title>
+<title>${esc(r.name)} — ScannBite backup report (${esc(copy.badge)})</title>
 <style>
   @page { margin: 32px 40px 46px; size: A4; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -273,7 +383,7 @@ function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
         </div>
       </div>
       <div class="header-right">
-        <span class="alltime-badge">All-time report</span>
+        <span class="alltime-badge">${esc(copy.badge)}</span>
         <div class="gendate">Generated ${dateTimeText(data.exported_at || new Date().toISOString())}</div>
       </div>
     </div>
@@ -287,24 +397,24 @@ function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
     </div>
 
     <div class="note-box">
-      <b>What this report covers:</b> every bill ever recorded for this café on ScannBite, start to finish — not a recent window. If you're comparing this to the café's own Reports page, set that page's date filter to "All time" first, since it defaults to the last 7 days.
+      ${copy.note}
     </div>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Lifetime Revenue</div><div class="stat-value">${money(revenue, currency)}</div></div>
+      <div class="stat-card"><div class="stat-label">${esc(copy.revenueLabel)}</div><div class="stat-value">${money(revenue, currency)}</div></div>
       <div class="stat-card"><div class="stat-label">Completed Bills</div><div class="stat-value">${billCount}</div></div>
       <div class="stat-card"><div class="stat-label">Average Bill</div><div class="stat-value">${money(avgBill, currency)}</div></div>
       <div class="stat-card"><div class="stat-label">Items Sold</div><div class="stat-value">${itemsSold}</div></div>
     </div>
 
-    <div class="section-title">Payment Methods (all-time)</div>
+    <div class="section-title">Payment Methods ${esc(copy.sectionSuffix)}</div>
     <div class="pay-bar">${barSegments}</div>
     <div class="pay-tiles">${paymentTilesHtml}</div>
 
     <div class="section-title">Menu (${data.summary?.menu_items ?? (data.menu_items || []).length} items)</div>
     ${menuHtml || '<p class="muted">No menu items recorded.</p>'}
 
-    <div class="section-title">Sales History (${billCount} bills)</div>
+    <div class="section-title">Sales History (${billCount} ${billCount === 1 ? 'bill' : 'bills'})</div>
     <table class="sales-table">
       <thead><tr><th>Date &amp; time</th><th>Table</th><th>Items</th><th>Payment</th><th class="num">Total</th></tr></thead>
       <tbody>${salesHtml || '<tr><td colspan="5" class="muted">No completed bills recorded.</td></tr>'}</tbody>
@@ -322,9 +432,10 @@ function buildCafeReportHtml(data: CafeExport, logoDataUrl: string | null) {
 // dialog on it — the same pattern this app already uses for bill receipts
 // (see TableManagement.tsx). The admin picks "Save as PDF" there to get the
 // actual file; this avoids adding a PDF-generation library as a dependency.
-async function printCafeReport(data: CafeExport) {
+async function printCafeReport(data: CafeExport, range: ReportRange, bounds?: CustomBounds) {
   const logoDataUrl = await getLogoDataUrl();
-  const html = buildCafeReportHtml(data, logoDataUrl);
+  const scopedData: CafeExport = { ...data, sales: filterSalesByRange(data.sales || [], range, bounds) };
+  const html = buildCafeReportHtml(scopedData, logoDataUrl, range, bounds);
 
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
@@ -478,6 +589,124 @@ function PlatformAdminGate({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+// "Download Report" button with a small dropdown offering Today / This
+// month / All time. Shared by both restaurant lists below so the open/close
+// and export-in-progress states only need to live in one place.
+function ExportReportButton({
+  exporting,
+  open,
+  size,
+  onToggle,
+  onPick,
+}: {
+  exporting: boolean;
+  open: boolean;
+  size: 'sm' | 'xs';
+  onToggle: () => void;
+  onPick: (range: ReportRange, bounds?: CustomBounds) => void;
+}) {
+  const isSm = size === 'sm';
+  const [mode, setMode] = useState<'list' | 'custom'>('list');
+  const [from, setFrom] = useState(() => toDateInputValue(Date.now()));
+  const [to, setTo] = useState(() => toDateInputValue(Date.now()));
+
+  // Every time the dropdown closes, start fresh on the list next time it
+  // opens rather than reopening mid-way through a date pick.
+  useEffect(() => {
+    if (!open) setMode('list');
+  }, [open]);
+
+  const customInvalid = !from || !to || to < from;
+  const confirmCustom = () => {
+    if (customInvalid) return;
+    onPick('custom', { start: fromDateInputValue(from), end: fromDateInputValue(to) + 86400000 - 1 });
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={onToggle}
+        disabled={exporting}
+        className={`rounded-lg bg-sky-50 text-sky-700 font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50 ${
+          isSm ? 'px-3 py-2 text-sm' : 'px-2.5 py-1.5 text-xs'
+        }`}
+        title="Print or save a PDF café backup report"
+      >
+        {exporting ? <RefreshCw size={isSm ? 14 : 13} className="animate-spin" /> : <Download size={isSm ? 14 : 13} />}
+        {exporting ? 'Preparing…' : 'Download Report'}
+        {!exporting && <ChevronDown size={isSm ? 14 : 12} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={onToggle} />
+          <div className="absolute right-0 mt-1 w-56 bg-white border border-ink-200 rounded-xl shadow-ticket-lg z-20 overflow-hidden">
+            {mode === 'list' ? (
+              <div className="py-1">
+                {REPORT_RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => onPick(opt.key)}
+                    className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-ink-50 transition-colors"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setMode('custom')}
+                  className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-ink-50 transition-colors border-t border-ink-100"
+                >
+                  Custom range…
+                </button>
+              </div>
+            ) : (
+              <div className="p-3 space-y-2.5">
+                <div>
+                  <label className="block text-[10px] font-semibold text-ink-500 uppercase tracking-wide mb-1">From</label>
+                  <input
+                    type="date"
+                    value={from}
+                    max={to || undefined}
+                    onChange={(e) => setFrom(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg border border-ink-200 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-basil-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-ink-500 uppercase tracking-wide mb-1">To</label>
+                  <input
+                    type="date"
+                    value={to}
+                    min={from || undefined}
+                    onChange={(e) => setTo(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-lg border border-ink-200 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-basil-400"
+                  />
+                </div>
+                {from && to && to < from && (
+                  <p className="text-[11px] text-paprika-600">"To" can't be before "From".</p>
+                )}
+                <div className="flex gap-2 pt-0.5">
+                  <button
+                    onClick={() => setMode('list')}
+                    className="flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold text-ink-500 hover:bg-ink-100 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={confirmCustom}
+                    disabled={customInvalid}
+                    className="flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold text-white bg-basil-500 hover:bg-basil-600 disabled:opacity-40 transition-colors"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [restaurants, setRestaurants] = useState<RestaurantRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -487,15 +716,17 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportMenuId, setExportMenuId] = useState<string | null>(null);
 
-  const exportCafe = async (restaurant: RestaurantRecord) => {
+  const exportCafe = async (restaurant: RestaurantRecord, range: ReportRange, bounds?: CustomBounds) => {
+    setExportMenuId(null);
     setExportingId(restaurant.id);
     setActionError(null);
     try {
       const { data, error } = await supabase.rpc('platform_export_restaurant_data', { target_id: restaurant.id });
       if (error) throw error;
       if (!data || !data.restaurant) throw new Error('No café report data was returned.');
-      await printCafeReport(data as CafeExport);
+      await printCafeReport(data as CafeExport, range, bounds);
     } catch (e: any) {
       setActionError(e?.message || 'Could not download the café report.');
     } finally {
@@ -637,15 +868,13 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                     <p className="text-xs text-ink-500 font-mono truncate">/{r.slug}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => exportCafe(r)}
-                      disabled={exportingId === r.id}
-                      className="px-3 py-2 rounded-lg bg-sky-50 text-sky-700 text-sm font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
-                      title="Print or save a PDF café backup report"
-                    >
-                      {exportingId === r.id ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-                      {exportingId === r.id ? 'Preparing…' : 'Download Report'}
-                    </button>
+                    <ExportReportButton
+                      size="sm"
+                      exporting={exportingId === r.id}
+                      open={exportMenuId === r.id}
+                      onToggle={() => setExportMenuId((prev) => (prev === r.id ? null : r.id))}
+                      onPick={(range, bounds) => exportCafe(r, range, bounds)}
+                    />
                     <button
                       onClick={() => act(r.id, 'rejected')}
                       disabled={busyId === r.id}
@@ -684,15 +913,13 @@ function PlatformAdminDashboard({ onLogout }: { onLogout: () => void }) {
                   <p className="text-[11px] text-ink-400 font-mono truncate mt-1">ID: {r.id}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => exportCafe(r)}
-                    disabled={exportingId === r.id}
-                    className="px-2.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-semibold hover:bg-sky-100 transition flex items-center gap-1.5 disabled:opacity-50"
-                    title="Print or save a PDF café backup report"
-                  >
-                    {exportingId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
-                    {exportingId === r.id ? 'Preparing…' : 'Download Report'}
-                  </button>
+                  <ExportReportButton
+                    size="xs"
+                    exporting={exportingId === r.id}
+                    open={exportMenuId === r.id}
+                    onToggle={() => setExportMenuId((prev) => (prev === r.id ? null : r.id))}
+                    onPick={(range, bounds) => exportCafe(r, range, bounds)}
+                  />
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                     r.status === 'approved'
                       ? 'bg-basil-100 text-basil-700'
