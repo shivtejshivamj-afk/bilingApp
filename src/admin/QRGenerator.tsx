@@ -28,101 +28,116 @@ export default function QRGenerator() {
       .catch(() => setQrDataUrl(''));
   }, [customerUrl]);
 
-  const printQR = () => {
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`
-      <html><head><title>Table ${selectedTable} QR Code</title>
-      <style>
-        body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { text-align: center; border: 2px solid #1C1917; border-radius: 16px; padding: 24px; }
-        h1 { margin: 0 0 8px; font-size: 28px; }
-        p { margin: 4px 0; color: #655C55; }
-        img { width: 300px; height: 300px; }
-        .url { margin-top: 12px; font-size: 12px; color: #B3ACA5; word-break: break-all; max-width: 320px; }
-      </style></head>
-      <body>
-        <div class="card">
-          <h1>Table ${selectedTable}</h1>
-          <p>Scan to view our menu &amp; order</p>
-          <img src="${qrDataUrl}" />
-          <p class="url">${customerUrl}</p>
-        </div>
-      </body></html>
-    `);
-    win.document.close();
-    setTimeout(() => win.print(), 300);
-  };
+  // Draws the styled QR card (dark background, white card, table badge).
+  // Used by BOTH Download and Print so they always look identical.
+  const renderCard = (): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const W = 600, H = 760;
+      const canvas = document.createElement('canvas');
+      const dpr = Math.max(window.devicePixelRatio || 1, 2);
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('no canvas'));
+      ctx.scale(dpr, dpr);
+
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#1C1917');
+      bg.addColorStop(1, '#251F1B');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      const cardX = 40, cardY = 40, cardW = W - 80, cardH = H - 80;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.25)';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetY = 8;
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, cardH, 24);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      ctx.fillStyle = '#C1440E';
+      ctx.fillRect(cardX, cardY, cardW, 8);
+
+      ctx.fillStyle = '#1C1917';
+      ctx.font = 'bold 30px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(settings.restaurantName || 'Restaurant', W / 2, cardY + 70);
+
+      const badgeY = cardY + 110;
+      ctx.fillStyle = '#C1440E';
+      ctx.beginPath();
+      ctx.roundRect(W / 2 - 90, badgeY, 180, 48, 24);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px system-ui, sans-serif';
+      ctx.fillText(`Table ${selectedTable}`, W / 2, badgeY + 32);
+
+      const qrImg = new Image();
+      qrImg.onerror = () => reject(new Error('qr load failed'));
+      qrImg.onload = () => {
+        const qrSize = 320;
+        ctx.drawImage(qrImg, (W - qrSize) / 2, badgeY + 70, qrSize, qrSize);
+
+        ctx.fillStyle = '#655C55';
+        ctx.font = '18px system-ui, sans-serif';
+        ctx.fillText('Scan to view our menu & order', W / 2, badgeY + 70 + qrSize + 40);
+
+        ctx.fillStyle = '#8A8078';
+        ctx.font = '13px monospace';
+        ctx.fillText(customerUrl, W / 2, badgeY + 70 + qrSize + 70);
+
+        ctx.fillStyle = '#B3ACA5';
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillText('Powered by Restaurant Billing System', W / 2, H - 60);
+
+        resolve(canvas.toDataURL('image/png'));
+      };
+      qrImg.src = qrDataUrl;
+    });
 
   const downloadQR = async () => {
     if (!qrDataUrl) return;
-    const W = 600, H = 760;
-    const canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#1C1917');
-    bg.addColorStop(1, '#251F1B');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-
-    const cardX = 40, cardY = 40, cardW = W - 80, cardH = H - 80;
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,0.25)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 8;
-    ctx.beginPath();
-    ctx.roundRect(cardX, cardY, cardW, cardH, 24);
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-
-    ctx.fillStyle = '#C1440E';
-    ctx.fillRect(cardX, cardY, cardW, 8);
-
-    ctx.fillStyle = '#1C1917';
-    ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(settings.restaurantName || 'Restaurant', W / 2, cardY + 70);
-
-    const badgeY = cardY + 110;
-    ctx.fillStyle = '#C1440E';
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - 90, badgeY, 180, 48, 24);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 26px system-ui, sans-serif';
-    ctx.fillText(`Table ${selectedTable}`, W / 2, badgeY + 32);
-
-    const qrImg = new Image();
-    qrImg.onload = () => {
-      const qrSize = 320;
-      ctx.drawImage(qrImg, (W - qrSize) / 2, badgeY + 70, qrSize, qrSize);
-
-      ctx.fillStyle = '#655C55';
-      ctx.font = '18px system-ui, sans-serif';
-      ctx.fillText('Scan to view our menu & order', W / 2, badgeY + 70 + qrSize + 40);
-
-      ctx.fillStyle = '#8A8078';
-      ctx.font = '13px monospace';
-      ctx.fillText(customerUrl, W / 2, badgeY + 70 + qrSize + 70);
-
-      ctx.fillStyle = '#B3ACA5';
-      ctx.font = '13px system-ui, sans-serif';
-      ctx.fillText('Powered by Restaurant Billing System', W / 2, H - 60);
-
+    try {
+      const href = await renderCard();
       const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
+      a.href = href;
       a.download = `table-${selectedTable}-qr.png`;
       a.click();
-    };
-    qrImg.src = qrDataUrl;
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const printQR = async () => {
+    if (!qrDataUrl) return;
+    // Open synchronously (inside the click) so popup blockers allow it.
+    const win = window.open('', '_blank');
+    if (!win) return;
+    try {
+      const href = await renderCard();
+      win.document.write(`
+        <html><head><title>Table ${selectedTable} QR Code</title>
+        <style>
+          @page { size: A4 portrait; margin: 0; }
+          html, body { margin: 0; padding: 0; height: 100%; background: #1C1917; }
+          body { display: flex; align-items: center; justify-content: center; }
+          img { max-width: 100%; max-height: 100vh; width: auto; height: auto; display: block;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        </style></head>
+        <body><img id="card" src="${href}" /></body></html>
+      `);
+      win.document.close();
+      const img = win.document.getElementById('card') as HTMLImageElement | null;
+      const go = () => setTimeout(() => win.print(), 200);
+      if (img && !img.complete) img.onload = go;
+      else go();
+    } catch {
+      win.close();
+    }
   };
 
   return (
