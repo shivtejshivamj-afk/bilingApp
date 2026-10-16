@@ -21,7 +21,9 @@ import ManualOrderModal from './ManualOrderModal';
 const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
 const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed'];
 
-export default function OrderManagement() {
+type OrderStage = 'all' | 'new' | 'cooking' | 'serve';
+
+export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage }) {
   const { orders, patchOrder, removeOrder } = useOrders();
   const { settings } = useSettings();
   // Sound preference and the new-order alert (chime/toast/OS notification)
@@ -104,6 +106,9 @@ export default function OrderManagement() {
     // (like a chat feed) actually hides how long the oldest order has been
     // waiting, buried at the bottom.
     const sorted = [...orders].sort((a, b) => a.createdAt - b.createdAt);
+    if (stage === 'new') return sorted.filter((o) => o.status === 'New');
+    if (stage === 'cooking') return sorted.filter((o) => o.items.some((i) => i.status === 'Cooking'));
+    if (stage === 'serve') return sorted.filter((o) => o.items.length > 0 && o.items.every((i) => i.status === 'Served'));
     if (filter === 'all') return sorted;
     // "Needs Attention": still has at least one item that isn't Served yet,
     // or hasn't even been acknowledged. Once every item on an order is
@@ -112,7 +117,7 @@ export default function OrderManagement() {
     return sorted.filter(
       (o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served')
     );
-  }, [orders, filter]);
+  }, [orders, filter, stage]);
 
   const newCount = orders.filter((o) => o.status === 'New').length;
 
