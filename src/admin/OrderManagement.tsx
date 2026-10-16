@@ -10,8 +10,6 @@ import {
   Plus,
   X,
   Trash2,
-  Search,
-  Store,
 } from 'lucide-react';
 import type { Order, OrderItem, OrderItemStatus } from '@/types';
 import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
@@ -36,7 +34,6 @@ export default function OrderManagement() {
   const [manualOpen, setManualOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleSound = () => {
     setSoundEnabled(!soundEnabled);
@@ -117,79 +114,98 @@ export default function OrderManagement() {
     );
   }, [orders, filter]);
 
-  const searchedOrders = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return visibleOrders;
-    return visibleOrders.filter((order) =>
-      String(order.tableNumber).includes(query) ||
-      order.id.toLowerCase().includes(query) ||
-      order.items.some((item) => item.name.toLowerCase().includes(query))
-    );
-  }, [visibleOrders, searchQuery]);
-
-  const orderLanes = useMemo(() => {
-    const lanes = { new: [] as Order[], cooking: [] as Order[], served: [] as Order[] };
-    for (const order of searchedOrders) {
-      if (order.status === 'New') lanes.new.push(order);
-      else if (order.items.length > 0 && order.items.every((item) => item.status === 'Served')) lanes.served.push(order);
-      else lanes.cooking.push(order);
-    }
-    return lanes;
-  }, [searchedOrders]);
   const newCount = orders.filter((o) => o.status === 'New').length;
-  const cookingCount = orders.filter((o) => o.status !== 'New' && o.items.length > 0 && !o.items.every((i) => i.status === 'Served')).length;
-  const servedCount = orders.filter((o) => o.items.length > 0 && o.items.every((i) => i.status === 'Served')).length;
 
   return (
-    <div className="space-y-5 pb-4">
-      {cancelError && <div className="flex items-center justify-between gap-3 rounded-xl border border-paprika-200 bg-paprika-50 px-4 py-3 text-sm text-paprika-700"><span>{cancelError}</span><button onClick={() => setCancelError(null)} className="rounded-lg px-2 py-1 font-bold hover:bg-paprika-100" aria-label="Dismiss error">×</button></div>}
-      <ConfirmDialog open={cancelTarget !== null} title="Cancel this order?" message="This will permanently remove the order. This can't be undone." confirmLabel="Cancel Order" danger onCancel={() => setCancelTarget(null)} onConfirm={() => { if (cancelTarget) cancelOrder(cancelTarget); setCancelTarget(null); }} />
-
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-paprika-100 text-paprika-600"><ChefHat size={23} /></span>
-          <div><h2 className="font-display text-2xl font-bold tracking-tight text-ink-900">Kitchen Dashboard</h2><p className="mt-0.5 text-sm text-ink-500">Track and manage your orders in real time</p></div>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="relative block min-w-0 sm:min-w-[230px] xl:w-72"><Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-400" /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search table or menu item…" className="h-11 w-full rounded-xl border border-ink-200 bg-white pl-10 pr-3 text-sm text-ink-800 shadow-sm outline-none transition placeholder:text-ink-400 focus:border-basil-400 focus:ring-4 focus:ring-basil-100" /></label>
-          <button onClick={() => setManualOpen(true)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-basil-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-basil-700"><Plus size={18} /> New Manual Order</button>
-          <button onClick={toggleSound} className={`inline-flex h-11 items-center justify-center rounded-xl border px-3 transition ${soundEnabled ? 'border-basil-200 bg-basil-50 text-basil-700 hover:bg-basil-100' : 'border-ink-200 bg-white text-ink-500 hover:bg-ink-50'}`} title={soundEnabled ? 'Sound on' : 'Sound off'} aria-label={soundEnabled ? 'Turn sound off' : 'Turn sound on'}>{soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SummaryCard label="New Orders" description="Waiting for confirmation" count={newCount} tone="new" icon={<Bell size={21} />} />
-        <SummaryCard label="Cooking" description="Being prepared" count={cookingCount} tone="cooking" icon={<ChefHat size={21} />} />
-        <SummaryCard label="Served" description="Ready for pickup" count={servedCount} tone="served" icon={<CheckCircle2 size={21} />} />
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-2xl border border-ink-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-ink-800"><Store size={17} className="text-ink-500" /> Order view</div>
-        <div className="flex flex-wrap items-center gap-3"><div className="inline-flex rounded-xl bg-ink-100 p-1"><button onClick={() => setFilter('active')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${filter === 'active' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'}`}>Needs Attention</button><button onClick={() => setFilter('all')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${filter === 'all' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'}`}>All Tables</button></div><span className="text-xs text-ink-400">{searchedOrders.length} shown</span></div>
-      </div>
-
-      {searchedOrders.length === 0 ? <div className="rounded-2xl border border-dashed border-ink-200 bg-white px-6 py-14 text-center shadow-sm"><Bell size={34} className="mx-auto mb-3 text-ink-300" /><p className="font-semibold text-ink-800">{searchQuery ? 'No matching orders' : filter === 'active' ? 'No orders need attention' : 'No orders yet'}</p><p className="mt-1 text-sm text-ink-500">{searchQuery ? 'Try another table number or menu item.' : 'New customer orders will appear here automatically.'}</p>{searchQuery && <button onClick={() => setSearchQuery('')} className="mt-3 text-sm font-semibold text-basil-700">Clear search</button>}</div> : (
-        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3 xl:gap-5">
-          <OrderLane title="New Orders" count={orderLanes.new.length} tone="new" emptyText="No new orders" icon={<Bell size={17} />}>{orderLanes.new.map((order, idx) => <OrderCard key={order.id} order={order} position={idx + 1} currency={settings.currency} isNew onAcknowledge={() => acknowledge(order.id)} onAdvanceItem={(i) => advanceItem(order.id, i)} onRemoveItem={(i) => removeItem(order.id, i)} onCancelOrder={() => setCancelTarget(order.id)} />)}</OrderLane>
-          <OrderLane title="Cooking" count={orderLanes.cooking.length} tone="cooking" emptyText="No orders in preparation" icon={<ChefHat size={17} />}>{orderLanes.cooking.map((order, idx) => <OrderCard key={order.id} order={order} position={idx + 1} currency={settings.currency} isNew={false} onAcknowledge={() => acknowledge(order.id)} onAdvanceItem={(i) => advanceItem(order.id, i)} onRemoveItem={(i) => removeItem(order.id, i)} onCancelOrder={() => setCancelTarget(order.id)} />)}</OrderLane>
-          <OrderLane title="Served" count={orderLanes.served.length} tone="served" emptyText="Served orders will appear here" icon={<CheckCircle2 size={17} />}>{orderLanes.served.map((order, idx) => <OrderCard key={order.id} order={order} position={idx + 1} currency={settings.currency} isNew={false} onAcknowledge={() => acknowledge(order.id)} onAdvanceItem={(i) => advanceItem(order.id, i)} onRemoveItem={(i) => removeItem(order.id, i)} onCancelOrder={() => setCancelTarget(order.id)} />)}</OrderLane>
+    <div className="space-y-4">
+      {cancelError && (
+        <div className="px-4 py-3 rounded-xl bg-paprika-50 border border-paprika-200 text-paprika-700 text-sm flex items-center justify-between">
+          <span>{cancelError}</span>
+          <button onClick={() => setCancelError(null)} className="text-paprika-500 hover:text-paprika-700 font-bold px-2">
+            ×
+          </button>
         </div>
       )}
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        title="Cancel this order?"
+        message="This will permanently remove the order. This can't be undone."
+        confirmLabel="Cancel Order"
+        danger
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={() => {
+          if (cancelTarget) cancelOrder(cancelTarget);
+          setCancelTarget(null);
+        }}
+      />
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold font-display text-ink-900">Live Orders</h2>
+          {newCount > 0 && (
+            <span className="px-2.5 py-0.5 rounded-full bg-paprika-500 text-white text-xs font-bold animate-pulse">
+              {newCount} NEW
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setManualOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-basil-500 text-white text-sm font-semibold flex items-center gap-2 hover:bg-basil-600 hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-sm hover:shadow-md"
+          >
+            <Plus size={18} />
+            New Manual Order
+          </button>
+          <div className="flex rounded-lg bg-ink-100 p-0.5">
+            <button
+              onClick={() => setFilter('active')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'active' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
+            >
+              Needs Attention
+            </button>
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'all' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
+            >
+              All Tables
+            </button>
+          </div>
+          <button
+            onClick={toggleSound}
+            className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-basil-100 text-basil-700' : 'bg-ink-100 text-ink-400'}`}
+            title={soundEnabled ? 'Sound on' : 'Sound off'}
+          >
+            {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          </button>
+        </div>
+      </div>
+
+      {visibleOrders.length === 0 && (
+        <div className="bg-white rounded-2xl border border-ink-200 py-20 text-center">
+          <Bell size={48} className="mx-auto text-ink-300 mb-3" />
+          <p className="text-ink-400 font-medium">No active orders right now.</p>
+          <p className="text-ink-400 text-sm mt-1">New customer orders will appear here instantly.</p>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {visibleOrders.map((order, idx) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            position={idx + 1}
+            currency={settings.currency}
+            isNew={order.status === 'New'}
+            onAcknowledge={() => acknowledge(order.id)}
+            onAdvanceItem={(idx) => advanceItem(order.id, idx)}
+            onRemoveItem={(idx) => removeItem(order.id, idx)}
+            onCancelOrder={() => setCancelTarget(order.id)}
+          />
+        ))}
+      </div>
+
       <ManualOrderModal open={manualOpen} onClose={() => setManualOpen(false)} />
     </div>
   );
-}
-
-function SummaryCard({ label, description, count, tone, icon }: { label: string; description: string; count: number; tone: 'new' | 'cooking' | 'served'; icon: React.ReactNode }) {
-  const styles = { new: 'border-paprika-200 bg-gradient-to-br from-paprika-50 to-white', cooking: 'border-orange-200 bg-gradient-to-br from-orange-50 to-white', served: 'border-basil-200 bg-gradient-to-br from-basil-50 to-white' };
-  const icons = { new: 'bg-paprika-500 text-white', cooking: 'bg-orange-500 text-white', served: 'bg-basil-600 text-white' };
-  return <div className={`flex min-w-0 items-center gap-4 rounded-2xl border p-4 shadow-sm sm:p-5 ${styles[tone]}`}><span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm ${icons[tone]}`}>{icon}</span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink-700">{label}</p><p className="mt-0.5 text-xs text-ink-500">{description}</p></div><span className="text-3xl font-bold tabular-nums tracking-tight text-ink-900">{count}</span></div>;
-}
-
-function OrderLane({ title, count, tone, emptyText, icon, children }: { title: string; count: number; tone: 'new' | 'cooking' | 'served'; emptyText: string; icon: React.ReactNode; children: React.ReactNode }) {
-  const styles = { new: { shell: 'border-paprika-200 bg-paprika-50/40', header: 'bg-paprika-50 text-paprika-700', icon: 'bg-paprika-500' }, cooking: { shell: 'border-orange-200 bg-orange-50/40', header: 'bg-orange-50 text-orange-800', icon: 'bg-orange-500' }, served: { shell: 'border-basil-200 bg-basil-50/40', header: 'bg-basil-50 text-basil-800', icon: 'bg-basil-600' } };
-  const style = styles[tone];
-  return <section className={`min-w-0 overflow-hidden rounded-2xl border ${style.shell}`}><div className={`flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3.5 ${style.header}`}><div className="flex min-w-0 items-center gap-2.5"><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white ${style.icon}`}>{icon}</span><h3 className="truncate text-sm font-bold sm:text-base">{title}</h3></div><span className="inline-flex min-w-8 items-center justify-center rounded-full bg-white px-2.5 py-1 text-xs font-bold tabular-nums shadow-sm">{count}</span></div><div className="flex min-h-36 flex-col gap-3 p-3 sm:p-3.5">{count === 0 ? <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-ink-200 bg-white/80 px-4 py-7 text-center"><span className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-ink-400 shadow-sm">{icon}</span><p className="text-sm font-medium text-ink-500">{emptyText}</p></div> : children}</div></section>;
 }
 
 function OrderCard({
@@ -212,8 +228,8 @@ function OrderCard({
   onCancelOrder: () => void;
 }) {
   return (
-    <div className={`min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md ${isNew ? 'border-paprika-300' : 'border-ink-200'}`}>
-      <div className={`flex items-start justify-between gap-2 border-b px-3.5 py-3 ${isNew ? 'bg-paprika-50/80 border-paprika-100' : 'bg-white border-ink-100'}`}>
+    <div className={`bg-white rounded-2xl border shadow-ticket overflow-hidden transition-all ${isNew ? 'border-paprika-400 ring-2 ring-paprika-200 animate-ticket-print' : 'border-ink-200'}`}>
+      <div className={`px-4 py-3 flex items-center justify-between ${isNew ? 'bg-paprika-50' : 'bg-ink-50'}`}>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold font-display ${isNew ? 'bg-paprika-500 text-white' : 'bg-ink-900 text-white'}`}>
             T{order.tableNumber}
@@ -231,8 +247,8 @@ function OrderCard({
 
       <div className="divide-y divide-ink-100">
         {order.items.map((item, idx) => (
-          <div key={idx} className="flex min-w-0 items-start gap-2.5 py-3">
-            <div className="min-w-0 flex-1">
+          <div key={idx} className="px-4 py-3 flex items-center gap-3 group">
+            <div className="flex-1">
               <p className="font-medium text-ink-900 text-sm">
                 <span className="text-ink-500">{item.quantity}×</span> {item.name}
               </p>
@@ -253,7 +269,7 @@ function OrderCard({
             </button>
             <button
               onClick={() => onRemoveItem(idx)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition hover:bg-paprika-50 hover:text-paprika-600"
+              className="p-1.5 rounded-lg text-ink-300 hover:text-paprika-600 hover:bg-paprika-50 transition-colors opacity-0 group-hover:opacity-100"
               title="Remove item"
             >
               <X size={15} />
@@ -268,16 +284,30 @@ function OrderCard({
         </div>
       )}
 
-      <div className="border-t border-ink-100 bg-ink-50/70 p-3.5">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-ink-500">Order total</span>
-          <span className="text-base font-bold tabular-nums text-ink-900">{formatMoney(order.total, currency)}</span>
+      <div className="px-4 py-3 bg-ink-50 border-t border-ink-100 flex items-center justify-between ticket-edge text-ink-200">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-ink-400">Total</span>
+          <span className="font-bold font-mono text-ink-900">{formatMoney(order.total, currency)}</span>
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {order.status !== 'Billed' && <button onClick={onCancelOrder} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-paprika-200 bg-white px-3 py-2 text-sm font-semibold text-paprika-700 transition hover:bg-paprika-50"><Trash2 size={14} /> Cancel order</button>}
-          {isNew && <button onClick={onAcknowledge} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-ink-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-ink-800"><Utensils size={14} /> Acknowledge</button>}
-          {!isNew && order.items.some((item) => item.status !== 'Served') && <span className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-800 sm:col-span-2"><ChefHat size={14} /> In preparation</span>}
-          {order.items.length > 0 && order.items.every((item) => item.status === 'Served') && <span className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-basil-100 px-3 py-2 text-sm font-semibold text-basil-800 sm:col-span-2"><CheckCircle2 size={15} /> All items served</span>}
+        <div className="flex items-center gap-2">
+          {order.status !== 'Billed' && (
+            <button
+              onClick={onCancelOrder}
+              className="px-3 py-2 rounded-lg bg-paprika-50 text-paprika-600 text-sm font-semibold hover:bg-paprika-100 transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 size={14} />
+              Cancel
+            </button>
+          )}
+          {isNew && (
+            <button
+              onClick={onAcknowledge}
+              className="px-4 py-2 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5"
+            >
+              <Utensils size={14} />
+              Acknowledge
+            </button>
+          )}
         </div>
       </div>
     </div>
