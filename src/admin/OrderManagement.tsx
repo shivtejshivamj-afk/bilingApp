@@ -23,7 +23,7 @@ const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed']
 
 type OrderStage = 'all' | 'new' | 'cooking' | 'serve';
 
-export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage }) {
+export default function OrderManagement({ stage = 'new' }: { stage?: OrderStage }) {
   const { orders, patchOrder, removeOrder } = useOrders();
   const { settings } = useSettings();
   // Sound preference and the new-order alert (chime/toast/OS notification)
@@ -32,7 +32,6 @@ export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage 
   // control here, not its own separate copy of the alert logic (which would
   // otherwise double-fire while this tab happens to be open).
   const { soundEnabled, setSoundEnabled } = useSoundPreference();
-  const [filter, setFilter] = useState<'active' | 'all'>('active');
   const [manualOpen, setManualOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -103,15 +102,9 @@ export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage 
     if (stage === 'new') return sorted.filter((o) => o.status === 'New');
     if (stage === 'cooking') return sorted.filter((o) => o.items.some((i) => i.status === 'Cooking'));
     if (stage === 'serve') return sorted.filter((o) => o.items.length > 0 && o.items.every((i) => i.status === 'Served'));
-    if (filter === 'all') return sorted;
-    // "Needs Attention": still has at least one item that isn't Served yet,
-    // or hasn't even been acknowledged. Once every item on an order is
-    // Served, it drops out of this view — it's just waiting to be billed,
-    // not waiting on the kitchen — but it still shows up under "All".
-    return sorted.filter(
-      (o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served')
-    );
-  }, [orders, filter, stage]);
+    // Fallback: show orders needing kitchen attention if no stage is supplied.
+    return sorted.filter((o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served'));
+  }, [orders, stage]);
 
   const newCount = orders.filter((o) => o.status === 'New').length;
 
@@ -154,20 +147,6 @@ export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage 
             <Plus size={18} />
             New Manual Order
           </button>
-          <div className="flex rounded-lg bg-ink-100 p-0.5">
-            <button
-              onClick={() => setFilter('active')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'active' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
-            >
-              Needs Attention
-            </button>
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'all' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500'}`}
-            >
-              All Tables
-            </button>
-          </div>
           <button
             onClick={toggleSound}
             className={`p-2 rounded-lg transition-colors ${soundEnabled ? 'bg-basil-100 text-basil-700' : 'bg-ink-100 text-ink-400'}`}
