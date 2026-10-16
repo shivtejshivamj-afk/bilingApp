@@ -187,21 +187,57 @@ export default function OrderManagement() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visibleOrders.map((order, idx) => (
-          <OrderCard
-            key={order.id}
-            order={order}
-            position={idx + 1}
-            currency={settings.currency}
-            isNew={order.status === 'New'}
-            onAcknowledge={() => acknowledge(order.id)}
-            onAdvanceItem={(idx) => advanceItem(order.id, idx)}
-            onRemoveItem={(idx) => removeItem(order.id, idx)}
-            onCancelOrder={() => setCancelTarget(order.id)}
-          />
-        ))}
-      </div>
+      {(() => {
+        // Kitchen-style board: each order appears in exactly one status column.
+        // New orders stay in New until acknowledged; orders with unfinished
+        // items are In Cooking; orders whose items are all served go to Served.
+        const newOrders = visibleOrders.filter((order) => order.status === 'New');
+        const servedOrders = visibleOrders.filter(
+          (order) => order.items.length > 0 && order.items.every((item) => item.status === 'Served')
+        );
+        const cookingOrders = visibleOrders.filter(
+          (order) => order.status !== 'New' &&
+            !(order.items.length > 0 && order.items.every((item) => item.status === 'Served'))
+        );
+        const columns = [
+          { id: 'new', title: 'New Orders', orders: newOrders, header: 'bg-paprika-50 text-paprika-700', count: 'bg-paprika-500 text-white' },
+          { id: 'cooking', title: 'Cooking', orders: cookingOrders, header: 'bg-orange-50 text-orange-700', count: 'bg-orange-500 text-white' },
+          { id: 'served', title: 'Served', orders: servedOrders, header: 'bg-basil-50 text-basil-700', count: 'bg-basil-600 text-white' },
+        ];
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            {columns.map((column) => (
+              <section key={column.id} className="min-w-0 rounded-2xl bg-ink-50/70 border border-ink-200 p-3 md:p-4">
+                <div className={`flex items-center justify-between rounded-xl px-3 py-3 mb-3 ${column.header}`}>
+                  <h3 className="font-bold font-display">{column.title}</h3>
+                  <span className={`min-w-7 text-center px-2 py-1 rounded-full text-xs font-bold ${column.count}`}>
+                    {column.orders.length}
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  {column.orders.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-ink-200 bg-white px-3 py-8 text-center text-sm text-ink-400">
+                      No {column.title.toLowerCase()}.
+                    </div>
+                  ) : column.orders.map((order, idx) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      position={idx + 1}
+                      currency={settings.currency}
+                      isNew={order.status === 'New'}
+                      onAcknowledge={() => acknowledge(order.id)}
+                      onAdvanceItem={(itemIdx) => advanceItem(order.id, itemIdx)}
+                      onRemoveItem={(itemIdx) => removeItem(order.id, itemIdx)}
+                      onCancelOrder={() => setCancelTarget(order.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        );
+      })()}
 
       <ManualOrderModal open={manualOpen} onClose={() => setManualOpen(false)} />
     </div>
