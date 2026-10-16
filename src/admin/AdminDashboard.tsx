@@ -11,6 +11,8 @@ import {
   X,
   Bell,
   TrendingUp,
+  ChefHat,
+  CheckCircle2,
 } from 'lucide-react';
 import { useOrders, useSettings, useSoundPreference } from '@/lib/useLocalData';
 import { playNewOrderChime } from '@/lib/audio';
@@ -24,6 +26,7 @@ import AdminSettings from './AdminSettings';
 const Reports = lazy(() => import('./Reports'));
 
 type Tab = 'orders' | 'tables' | 'menu' | 'qr' | 'reports' | 'settings';
+type OrderStage = 'all' | 'new' | 'cooking' | 'serve';
 
 const TABS: { id: Tab; label: string; icon: typeof ClipboardList }[] = [
   { id: 'orders', label: 'Orders', icon: ClipboardList },
@@ -39,6 +42,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { orders } = useOrders();
   const { soundEnabled } = useSoundPreference();
   const [tab, setTab] = useState<Tab>('orders');
+  const [orderStage, setOrderStage] = useState<OrderStage>('all');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newFlash, setNewFlash] = useState(false);
   const prevNewCount = useRef(0);
@@ -212,7 +216,29 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* Content */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-          {tab === 'orders' && <OrderManagement />}
+          {tab === 'orders' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button onClick={() => setOrderStage('new')} className={`text-left rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${orderStage === 'new' ? 'ring-2 ring-blue-400 border-blue-300 bg-blue-50' : 'border-blue-100 bg-white'}`}>
+                  <div className="flex items-center justify-between"><span className="text-sm font-semibold text-blue-700">New Orders</span><ClipboardList size={21} className="text-blue-600" /></div>
+                  <p className="mt-3 text-3xl font-bold text-blue-900">{orders.filter(o => o.status === 'New').length}</p>
+                  <p className="mt-1 text-xs text-blue-700">Waiting to be accepted · Click to view</p>
+                </button>
+                <button onClick={() => setOrderStage('cooking')} className={`text-left rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${orderStage === 'cooking' ? 'ring-2 ring-orange-400 border-orange-300 bg-orange-50' : 'border-orange-100 bg-white'}`}>
+                  <div className="flex items-center justify-between"><span className="text-sm font-semibold text-orange-700">Cooking</span><ChefHat size={21} className="text-orange-600" /></div>
+                  <p className="mt-3 text-3xl font-bold text-orange-900">{orders.filter(o => o.items.some(i => i.status === 'Cooking')).length}</p>
+                  <p className="mt-1 text-xs text-orange-700">Currently being prepared · Click to view</p>
+                </button>
+                <button onClick={() => setOrderStage('serve')} className={`text-left rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${orderStage === 'serve' ? 'ring-2 ring-green-400 border-green-300 bg-green-50' : 'border-green-100 bg-white'}`}>
+                  <div className="flex items-center justify-between"><span className="text-sm font-semibold text-green-700">Ready to Serve</span><CheckCircle2 size={21} className="text-green-600" /></div>
+                  <p className="mt-3 text-3xl font-bold text-green-900">{orders.filter(o => o.items.length > 0 && o.items.every(i => i.status === 'Served')).length}</p>
+                  <p className="mt-1 text-xs text-green-700">All items served/ready · Click to view</p>
+                </button>
+              </div>
+              {orderStage !== 'all' && <div className="flex items-center justify-between"><p className="text-sm text-ink-500">Showing {orderStage === 'new' ? 'new orders' : orderStage === 'cooking' ? 'cooking orders' : 'ready-to-serve orders'}</p><button onClick={() => setOrderStage('all')} className="text-sm font-semibold text-paprika-600 hover:text-paprika-700">Show all orders</button></div>}
+              <OrderManagement stage={orderStage} />
+            </div>
+          )}
           {tab === 'tables' && <TableManagement />}
           {tab === 'menu' && <MenuManager />}
           {tab === 'qr' && <QRGenerator />}
