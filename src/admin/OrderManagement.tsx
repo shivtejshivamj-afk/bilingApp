@@ -102,14 +102,14 @@ export default function OrderManagement({ stage = 'new' }: { stage?: OrderStage 
     // (like a chat feed) actually hides how long the oldest order has been
     // waiting, buried at the bottom.
     const sorted = [...orders].sort((a, b) => a.createdAt - b.createdAt);
-    if (stage === 'new') return sorted.filter((o) => o.status === 'New');
+    if (stage === 'new') return sorted.filter((o) => o.status === 'New' || o.items.some((i) => i.status === 'Pending'));
     if (stage === 'cooking') return sorted.filter((o) => o.items.some((i) => i.status === 'Cooking'));
     if (stage === 'serve') return sorted.filter((o) => o.items.length > 0 && o.items.every((i) => i.status === 'Served'));
     // Fallback: show orders needing kitchen attention if no stage is supplied.
     return sorted.filter((o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served'));
   }, [orders, stage]);
 
-  const newCount = orders.filter((o) => o.status === 'New').length;
+  const newCount = orders.filter((o) => o.status === 'New' || o.items.some((i) => i.status === 'Pending')).length;
 
   return (
     <div className="space-y-4">
@@ -175,7 +175,7 @@ export default function OrderManagement({ stage = 'new' }: { stage?: OrderStage 
             order={order}
             position={idx + 1}
             currency={settings.currency}
-            isNew={order.status === 'New'}
+            isNew={order.status === 'New' || order.items.some((item) => item.status === 'Pending')}
             onAdvanceItem={(idx) => advanceItem(order.id, idx)}
             onRemoveItem={(idx) => removeItem(order.id, idx)}
             onCancelOrder={() => setCancelTarget(order.id)}
