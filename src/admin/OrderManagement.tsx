@@ -21,7 +21,9 @@ import ManualOrderModal from './ManualOrderModal';
 const ITEM_FLOW: OrderItemStatus[] = ['Pending', 'Cooking', 'Served'];
 const ORDER_FLOW: Order['status'][] = ['New', 'Acknowledged', 'Ready', 'Billed'];
 
-export default function OrderManagement() {
+type OrderStage = 'all' | 'new' | 'cooking' | 'serve';
+
+export default function OrderManagement({ stage = 'all' }: { stage?: OrderStage }) {
   const { orders, patchOrder, removeOrder } = useOrders();
   const { settings } = useSettings();
   // Sound preference and the new-order alert (chime/toast/OS notification)
@@ -58,12 +60,6 @@ export default function OrderManagement() {
     patchOrder({ ...order, items, status });
   };
 
-  const acknowledge = (orderId: string) => {
-    const order = orders.find((o) => o.id === orderId);
-    if (!order) return;
-    patchOrder({ ...order, status: 'Acknowledged' });
-    playStatusChime();
-  };
 
   const removeItem = (orderId: string, itemIdx: number) => {
     const order = orders.find((o) => o.id === orderId);
@@ -104,6 +100,9 @@ export default function OrderManagement() {
     // (like a chat feed) actually hides how long the oldest order has been
     // waiting, buried at the bottom.
     const sorted = [...orders].sort((a, b) => a.createdAt - b.createdAt);
+    if (stage === 'new') return sorted.filter((o) => o.status === 'New');
+    if (stage === 'cooking') return sorted.filter((o) => o.items.some((i) => i.status === 'Cooking'));
+    if (stage === 'serve') return sorted.filter((o) => o.items.length > 0 && o.items.every((i) => i.status === 'Served'));
     if (filter === 'all') return sorted;
     // "Needs Attention": still has at least one item that isn't Served yet,
     // or hasn't even been acknowledged. Once every item on an order is
@@ -112,7 +111,7 @@ export default function OrderManagement() {
     return sorted.filter(
       (o) => o.status === 'New' || o.items.some((i) => i.status !== 'Served')
     );
-  }, [orders, filter]);
+  }, [orders, filter, stage]);
 
   const newCount = orders.filter((o) => o.status === 'New').length;
 
@@ -195,7 +194,6 @@ export default function OrderManagement() {
             position={idx + 1}
             currency={settings.currency}
             isNew={order.status === 'New'}
-            onAcknowledge={() => acknowledge(order.id)}
             onAdvanceItem={(idx) => advanceItem(order.id, idx)}
             onRemoveItem={(idx) => removeItem(order.id, idx)}
             onCancelOrder={() => setCancelTarget(order.id)}
@@ -213,7 +211,6 @@ function OrderCard({
   position,
   currency,
   isNew,
-  onAcknowledge,
   onAdvanceItem,
   onRemoveItem,
   onCancelOrder,
@@ -222,7 +219,6 @@ function OrderCard({
   position: number;
   currency: string;
   isNew: boolean;
-  onAcknowledge: () => void;
   onAdvanceItem: (idx: number) => void;
   onRemoveItem: (idx: number) => void;
   onCancelOrder: () => void;
@@ -297,15 +293,6 @@ function OrderCard({
             >
               <Trash2 size={14} />
               Cancel
-            </button>
-          )}
-          {isNew && (
-            <button
-              onClick={onAcknowledge}
-              className="px-4 py-2 rounded-lg bg-ink-900 text-white text-sm font-semibold hover:bg-ink-800 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5"
-            >
-              <Utensils size={14} />
-              Acknowledge
             </button>
           )}
         </div>
