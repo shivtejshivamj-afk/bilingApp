@@ -46,7 +46,9 @@ export default function OrderManagement({ stage = 'new' }: { stage?: OrderStage 
     if (!order) return;
     const items = order.items.map((it, i) => {
       if (i !== itemIdx) return it;
-      const next = ITEM_FLOW[(ITEM_FLOW.indexOf(it.status) + 1) % ITEM_FLOW.length];
+      // Normal flow: Pending -> Cooking -> Served. If an already-served item is clicked,
+      // send it back to Cooking so the order reappears in the Cooking list.
+      const next: OrderItemStatus = it.status === 'Served' ? 'Cooking' : ITEM_FLOW[ITEM_FLOW.indexOf(it.status) + 1];
       return { ...it, status: next };
     });
     const allServed = items.every((i) => i.status === 'Served');
@@ -54,6 +56,7 @@ export default function OrderManagement({ stage = 'new' }: { stage?: OrderStage 
     let status = order.status;
     if (order.status === 'New') status = 'Acknowledged';
     if (allServed && status !== 'Billed') status = 'Ready';
+    else if (!allServed && status === 'Ready') status = 'Acknowledged';
     else if (allCookingOrBeyond && status === 'Acknowledged') status = 'Acknowledged';
     playStatusChime();
     patchOrder({ ...order, items, status });
