@@ -221,8 +221,8 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button onClick={() => setOrderStage('new')} className={`text-left rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${orderStage === 'new' ? 'ring-2 ring-blue-400 border-blue-300 bg-blue-50' : 'border-blue-100 bg-white'}`}>
                   <div className="flex items-center justify-between"><span className="text-sm font-semibold text-blue-700">New Orders</span><ClipboardList size={21} className="text-blue-600" /></div>
-                  <p className="mt-3 text-3xl font-bold text-blue-900">{orders.filter(o => o.status === 'New').length}</p>
-                  <p className="mt-1 text-xs text-blue-700">Waiting to be accepted · Click to view</p>
+                  <p className="mt-3 text-3xl font-bold text-blue-900">{orders.filter(o => o.status === 'New' || o.items.some(i => i.status === 'Pending')).length}</p>
+                  <p className="mt-1 text-xs text-blue-700">Waiting orders · Click to view</p>
                 </button>
                 <button onClick={() => setOrderStage('cooking')} className={`text-left rounded-2xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-md ${orderStage === 'cooking' ? 'ring-2 ring-orange-400 border-orange-300 bg-orange-50' : 'border-orange-100 bg-white'}`}>
                   <div className="flex items-center justify-between"><span className="text-sm font-semibold text-orange-700">Cooking</span><ChefHat size={21} className="text-orange-600" /></div>
