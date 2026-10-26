@@ -138,6 +138,7 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
   // land back on, so it's clear this wasn't a normal logout they did
   // themselves.
   const [kickedReason, setKickedReason] = useState<'suspended' | 'rejected' | null>(null);
+  const [loginNotice, setLoginNotice] = useState<string | null>(null);
 
   // Read through a ref rather than depending on restaurant.ownerId directly
   // below — this lets the auth check/subscription set up exactly ONCE and
@@ -216,13 +217,13 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
           restaurantId={restaurant.id}
           ownerId={restaurant.ownerId}
           notice={
-            kickedReason === 'suspended'
+            loginNotice ?? (kickedReason === 'suspended'
               ? 'Your account has been suspended. If you believe this is a mistake, or need to settle your account, please contact the platform owner.'
               : kickedReason === 'rejected'
               ? 'This restaurant is no longer approved on the platform. Please contact the platform owner.'
-              : undefined
+              : undefined)
           }
-          onSuccess={() => {
+          onSuccess={(userId) => {
             // Checked here, before ever showing the dashboard: if this
             // restaurant is suspended/rejected, the credentials were
             // correct but access still isn't allowed — sign straight back
@@ -231,14 +232,25 @@ function RestaurantRouter({ restaurant, onClaimed }: { restaurant: RestaurantRec
             // different screen for an instant) before the effect above
             // caught it and bounced back — correct, but a confusing flash
             // instead of an immediate, clear answer.
-            if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
-              setKickedReason(restaurant.status);
-              signOut();
+            // A Supabase login can succeed for any valid account on this shared
+            // domain. Never unlock this restaurant's dashboard unless that exact
+            // user owns the restaurant resolved from the current URL slug.
+            if (!restaurant.ownerId || userId !== restaurant.ownerId) {
+              setLoginNotice('These login details belong to a different restaurant. Please open your own restaurant link and sign in there.');
+              void signOut();
+              setAuthState('out');
               return;
             }
+            if (restaurant.status === 'suspended' || restaurant.status === 'rejected') {
+              setKickedReason(restaurant.status);
+              void signOut();
+              setAuthState('out');
+              return;
+            }
+            setLoginNotice(null);
             setKickedReason(null);
             setAuthState('in');
-            onClaimed(); // refetches the restaurant record so ownerId is current
+            onClaimed(); // refetches the restaurant record so ownerId stays current
           }}
         />
       );
